@@ -202,7 +202,10 @@ internal sealed class AgentWindow : Form
         _log.ForeColor = Color.FromArgb(226, 232, 240);
         _log.Font = Theme.Mono;
         _log.BorderStyle = BorderStyle.None;
-        _log.WordWrap = false;
+        // Diagnostics can be a couple of sentences long; wrapping beats making
+        // the architect scroll sideways to read why a transfer failed.
+        _log.WordWrap = true;
+        _log.ScrollBars = RichTextBoxScrollBars.Vertical;
         logBox.Controls.Add(_log);
 
         // Docked controls are laid out in reverse z-order: whatever is added

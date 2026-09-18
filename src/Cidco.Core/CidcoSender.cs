@@ -163,7 +163,7 @@ public sealed class CidcoSender
         }
         catch (Exception error)
         {
-            return SendResult.Failed($"Could not reach CIDCO at {Host}:{Port} — {Explain(error)}");
+            return SendResult.Failed(DiagnoseConnection(error));
         }
     }
 
@@ -182,17 +182,34 @@ public sealed class CidcoSender
 
         var target = RemotePath.For(CompanyId, CsvFolder, source.Name);
 
+        // Getting to CIDCO and being turned away by CIDCO are different
+        // problems with different fixes, so they are caught separately. Saying
+        // "CIDCO refused the transfer" when the server was never reached sends
+        // the architect hunting through company ids and file paths when the
+        // real answer is the address or the port.
+        SftpClient client;
         try
         {
-            using var client = Connect();
-            using var stream = source.OpenRead();
-            client.UploadFile(stream, target);
-            client.Disconnect();
+            client = Connect();
         }
         catch (SshAuthenticationException)
         {
             return SendResult.Failed("That username and password were refused by CIDCO.")
                 with { FileName = source.Name, Remote = target };
+        }
+        catch (Exception error)
+        {
+            return SendResult.Failed(DiagnoseConnection(error))
+                with { FileName = source.Name, Remote = target };
+        }
+
+        try
+        {
+            using (client)
+            using (var stream = source.OpenRead())
+            {
+                client.UploadFile(stream, target);
+            }
         }
         catch (Exception error)
         {
@@ -225,6 +242,53 @@ public sealed class CidcoSender
             SentAt = result.SentAt,
         });
         return result;
+    }
+
+    /// <summary>
+    /// Turns a failed connection into something an architect can act on.
+    ///
+    /// The underlying errors talk about SSH internals — "no valid SSH
+    /// identification string", socket codes — which tell the person at the
+    /// keyboard nothing. Each one here maps to the thing that is actually
+    /// wrong and who can fix it.
+    /// </summary>
+    public string DiagnoseConnection(Exception error)
+    {
+        var where = $"{Host}:{Port}";
+
+        // Something answered on the port but never sent the "SSH-2.0-…"
+        // greeting that opens every SSH conversation. A web server does
+        // exactly this when you speak SSH at it, which is the usual story: the
+        // port given out was the portal's, not the SFTP intake's.
+        if (error is SshConnectionException &&
+            error.Message.Contains("identification string", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Something is listening on {where}, but it is not an SFTP server — it closed the " +
+                   "connection without an SSH greeting. That port is usually CIDCO's web portal rather " +
+                   "than its SFTP intake, which listens on 2222 by default. Check the port with CIDCO, " +
+                   "and that their SFTP service is running.";
+        }
+
+        if (error is System.Net.Sockets.SocketException socket)
+        {
+            return socket.SocketErrorCode switch
+            {
+                System.Net.Sockets.SocketError.ConnectionRefused =>
+                    $"Nothing is listening on {where}. Check the designated IP and port with CIDCO, and " +
+                    "that their SFTP service is running.",
+                System.Net.Sockets.SocketError.TimedOut or System.Net.Sockets.SocketError.HostUnreachable =>
+                    $"{where} did not answer. A firewall between this PC and CIDCO — or a closed port on " +
+                    "their side — is the usual cause.",
+                System.Net.Sockets.SocketError.HostNotFound =>
+                    $"\"{Host}\" could not be looked up. Check the designated IP CIDCO sent you.",
+                _ => $"Could not reach CIDCO at {where} — {Explain(error)}",
+            };
+        }
+
+        if (error is SshOperationTimeoutException)
+            return $"{where} did not answer in time. A firewall between this PC and CIDCO is the usual cause.";
+
+        return $"Could not reach CIDCO at {where} — {Explain(error)}";
     }
 
     private static string Explain(Exception error) =>

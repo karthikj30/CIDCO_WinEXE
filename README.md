@@ -226,6 +226,41 @@ The two WinForms screens need Windows to run, which is why the logic they drive
 was pulled out into `Cidco.Core` — the wizard's step order and folder check are
 covered by `SetupFlowTests` rather than left to a click-through.
 
+## When it will not connect
+
+The transfer log names the cause. The three you are most likely to meet:
+
+| What the log says | What it means |
+| --- | --- |
+| **Something is listening on *host:port*, but it is not an SFTP server** | The TCP connection worked, but whatever answered never sent an SSH greeting. Almost always the wrong port — the portal's rather than the SFTP intake's. CIDCO's intake is `2222` unless they changed `SFTP_PORT`. |
+| **Nothing is listening on *host:port*** | The port is closed. Either the SFTP service is not running on CIDCO's side, or a firewall is dropping it. |
+| **That username and password were refused by CIDCO** | You reached the SFTP server — the address and port are right — and the credentials are wrong. |
+
+To check a port by hand from the architect's PC, in PowerShell:
+
+```powershell
+# Is anything there at all?
+Test-NetConnection 13.207.123.12 -Port 2222
+
+# Is it an SSH server? This should print something like "SSH-2.0-..."
+$c = New-Object Net.Sockets.TcpClient('13.207.123.12', 2222)
+(New-Object IO.StreamReader($c.GetStream())).ReadLine()
+$c.Close()
+```
+
+If that second command prints nothing, or prints HTML, that port is not the SFTP
+intake.
+
+On CIDCO's side the intake is a separate process from the web app:
+
+```bash
+npm run sftp            # listens on SFTP_PORT, default 2222
+SFTP_PORT=8010 npm run sftp   # or wherever the firewall is open
+```
+
+It binds `0.0.0.0`, so the remaining step is opening that port to the architect's
+address — on AWS, an inbound rule in the instance's security group.
+
 ## A note on key exchange
 
 .NET's cryptography sits on OpenSSL on Linux and on CNG on Windows, and the two
