@@ -90,19 +90,48 @@ public class IntakeDiscoveryTests
     }
 
     [Fact]
-    public void When_nothing_answers_it_says_what_it_tried_and_what_to_do()
+    public void A_port_the_architect_typed_gets_no_lecture_about_typing_a_port()
     {
-        // An explicit port, so the search does not fall through to the standard
-        // one — which on a developer's machine is usually a running server.
+        // Telling somebody who typed ":8010" that they could try typing a port
+        // is noise on top of a message that already said what was wrong.
         var closed = ClosedPort();
         var (_, result) = CidcoSender.FindIntake(
             new ServerAddress("127.0.0.1", closed, PortWasGiven: true),
             "cidco@example.com", "123456", "ABCD123", "/tmp", TimeSpan.FromSeconds(3));
 
         Assert.False(result.Ok);
-        Assert.Contains($"Tried port {closed}", result.Message);
-        Assert.Contains("running", result.Message);        // ask CIDCO to start it
-        Assert.Contains("127.0.0.1:8010", result.Message); // how to name another port
+        Assert.Contains("Nothing is listening", result.Message);
+        Assert.DoesNotContain("put it after the address", result.Message);
+    }
+
+    [SkippableFact]
+    public void When_the_agent_guessed_and_missed_it_offers_the_way_to_say_otherwise()
+    {
+        // A guess falls through to the standard port, so this only says
+        // anything on a machine that has no intake running on it.
+        Skip.If(SomethingOn(ServerAddress.StandardPort), "an intake is running on the standard port");
+
+        var (_, result) = CidcoSender.FindIntake(
+            new ServerAddress("127.0.0.1", ClosedPort(), PortWasGiven: false),
+            "cidco@example.com", "123456", "ABCD123", "/tmp", TimeSpan.FromSeconds(3));
+
+        Assert.False(result.Ok);
+        Assert.Contains($"tried port {ServerAddress.StandardPort}", result.Message);
+        Assert.Contains("put it after the address", result.Message);
+    }
+
+    private static bool SomethingOn(int port)
+    {
+        try
+        {
+            using var probe = new TcpClient();
+            return probe.ConnectAsync(IPAddress.Loopback, port).Wait(TimeSpan.FromSeconds(2))
+                   && probe.Connected;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private static int ClosedPort()

@@ -138,15 +138,26 @@ public sealed class CidcoSender
         }
 
         // Nothing answered as SFTP. Report the first, most likely port rather
-        // than whatever the last long shot happened to say, and point at the
-        // two things that are actually wrong when this happens.
-        var tried = string.Join(", ", ports);
-        var advice =
-            $" Tried port {tried} on {address.Host}. Ask CIDCO to confirm their SFTP intake is running, " +
-            $"and on which port \u2014 if it is not {ServerAddress.StandardPort}, add it to the address like " +
-            $"\"{address.Host}:8010\".";
+        // than whatever the last long shot happened to say.
+        //
+        // The nudge about naming a different port is only added when the agent
+        // was the one guessing. Telling somebody who typed ":8010" that they
+        // could try typing a port is noise on top of a message that already
+        // told them what was wrong.
+        var answer = firstAnswer!;
 
-        return (attempted!, firstAnswer! with { Message = firstAnswer!.Message + advice });
+        if (!address.PortWasGiven)
+        {
+            answer = answer with
+            {
+                Message = answer.Message +
+                    $" The agent tried port {ServerAddress.StandardPort}, which is where CIDCO's intake " +
+                    $"normally listens. If theirs is somewhere else, put it after the address, like " +
+                    $"\"{address.Host}:8010\".",
+            };
+        }
+
+        return (attempted!, answer);
     }
 
     /// <summary>
