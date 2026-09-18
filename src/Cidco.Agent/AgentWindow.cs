@@ -43,6 +43,7 @@ internal sealed class AgentWindow : Form
     private readonly ListView _remote = new();
     private readonly RichTextBox _log = new();
     private readonly System.Windows.Forms.Timer _timer = new();
+    private SplitContainer? _panes;
 
     public AgentWindow(Database db)
     {
@@ -127,7 +128,6 @@ internal sealed class AgentWindow : Form
         _connect.Click += (_, _) => _ = ConnectAsync();
         connect.Controls.Add(_connect);
 
-        Controls.Add(connect);
 
         // --- status line ---------------------------------------------------
         var status = new Panel { Dock = DockStyle.Top, Height = 26, Padding = new Padding(12, 4, 12, 4) };
@@ -140,16 +140,13 @@ internal sealed class AgentWindow : Form
         _scheduleText.AutoSize = true;
         _scheduleText.Location = new Point(560, 7);
         status.Controls.AddRange(new Control[] { _state, _scheduleText });
-        Controls.Add(status);
 
         // --- the two panes -------------------------------------------------
-        var panes = new SplitContainer
-        {
-            Dock = DockStyle.Fill,
-            SplitterDistance = 480,
-            Panel1MinSize = 300,
-            Panel2MinSize = 300,
-        };
+        // The splitter is positioned in OnLoad, not here: SplitterDistance is
+        // validated against the control's current width, and at this point it
+        // has none, so setting it now throws.
+        var panes = new SplitContainer { Dock = DockStyle.Fill };
+        _panes = panes;
 
         var left = new GroupBox { Text = " This computer ", Dock = DockStyle.Fill, Padding = new Padding(8, 6, 8, 8) };
         _local.View = View.Details;
@@ -196,8 +193,6 @@ internal sealed class AgentWindow : Form
         right.Controls.Add(rightBar);
         panes.Panel2.Controls.Add(right);
 
-        Controls.Add(panes);
-        panes.BringToFront();
 
         // --- transfer log ---------------------------------------------------
         var logBox = new GroupBox { Text = " Transfer log ", Dock = DockStyle.Bottom, Height = 160, Padding = new Padding(8, 6, 8, 8) };
@@ -209,7 +204,15 @@ internal sealed class AgentWindow : Form
         _log.BorderStyle = BorderStyle.None;
         _log.WordWrap = false;
         logBox.Controls.Add(_log);
+
+        // Docked controls are laid out in reverse z-order: whatever is added
+        // last ends up closest to the form edge. So this goes innermost first —
+        // the fill, then the log, then the status line, then the connect bar —
+        // which reads top to bottom as: connect, status, panes, log.
+        Controls.Add(panes);
         Controls.Add(logBox);
+        Controls.Add(status);
+        Controls.Add(connect);
     }
 
     private void LoadSettingsIntoFields()
@@ -418,6 +421,28 @@ internal sealed class AgentWindow : Form
         Log(true, $"Automatic sending started — every {every}.");
 
         _ = SendAsync(null, scheduled: true);
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+
+        // Now the panes have a real width, so an even split is a legal one.
+        if (_panes is { Width: > 0 } panes)
+        {
+            var half = panes.Width / 2;
+            var lowest = panes.Panel1MinSize;
+            var highest = panes.Width - panes.Panel2MinSize;
+            if (highest > lowest) panes.SplitterDistance = Math.Clamp(half, lowest, highest);
+
+            // Only once the position is valid can the minimums be raised to
+            // something that keeps both panes usable.
+            if (panes.Width > 640)
+            {
+                panes.Panel1MinSize = 300;
+                panes.Panel2MinSize = 300;
+            }
+        }
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)

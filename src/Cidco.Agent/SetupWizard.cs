@@ -87,13 +87,17 @@ internal sealed class SetupWizard : Form
             AutoSize = true,
             Location = new Point(20, 112),
         });
+        // Pinned to the bottom of the banner rather than a fixed y, which the
+        // footer was cropping.
         banner.Controls.Add(new Label
         {
-            Text = "v1.0.0",
+            Text = "v" + WindowsIntegration.Version,
             ForeColor = Theme.Faint,
             Font = Theme.Small,
-            AutoSize = true,
-            Location = new Point(20, 350),
+            Dock = DockStyle.Bottom,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(20, 0, 0, 0),
+            Height = 28,
         });
         Controls.Add(banner);
 

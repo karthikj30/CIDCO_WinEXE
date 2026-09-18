@@ -4,6 +4,10 @@ obj/
 dist/
 *.user
 
+# ...except the published executable, which is committed so it can be
+# downloaded straight from the repo without building anything.
+!dist/CIDCO_AQI_Agent.exe
+
 # The agent's own database, if one is ever created in the tree
 *.db
 *.db-wal

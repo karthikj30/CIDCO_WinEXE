@@ -29,13 +29,19 @@ file over and show them what CIDCO answered.
 Built with **C# on .NET 8**, WinForms for the two screens, **SQLite** for the
 agent's own settings and history, and SSH.NET for the transfer.
 
-## One file, one install
+## Download it
 
-`build.bat` produces a single **self-contained** executable:
+The built executable is committed, so there is nothing to build first:
 
 ```
 dist\CIDCO_AQI_Agent.exe
 ```
+
+Download that one file and run it. To rebuild it yourself, see **Building** below.
+
+## One file, one install
+
+`build.bat` produces a single **self-contained** executable at that same path.
 
 Self-contained means the .NET runtime is inside it — the architect's PC needs
 nothing installed first. That one file is both the installer and the program:
@@ -195,9 +201,9 @@ and has no connection to it.
 dotnet test
 ```
 
-72 tests over the schedule table, the database (including that the password
-stays out of it), the wizard's step logic, the upload path and picking the
-newest export.
+84 tests over the schedule table, the database (including that the password
+stays out of it), the wizard's step logic, the key exchange algorithms Windows
+can actually do, the upload path and picking the newest export.
 
 Seven of them talk to a **real CIDCO server** and skip when there isn't one. To
 run those, start the server side and point the tests at it:
@@ -219,3 +225,19 @@ dotnet test
 The two WinForms screens need Windows to run, which is why the logic they drive
 was pulled out into `Cidco.Core` — the wizard's step order and folder check are
 covered by `SetupFlowTests` rather than left to a click-through.
+
+## A note on key exchange
+
+.NET's cryptography sits on OpenSSL on Linux and on CNG on Windows, and the two
+do not offer the same algorithms. SSH.NET prefers Curve25519, which CNG has no
+ECDH for, so the agent never offers it — otherwise the handshake dies with *"The
+specified curve 'Curve25519' or its parameters are not valid for this platform"*
+before a byte of AQI data moves.
+
+That leaves ECDH over the NIST curves, which normal Windows does fine. A machine
+whose CNG is cut down — an old build, a locked-down or FIPS-restricted image —
+answers those with `NTE_NOT_SUPPORTED` instead, and a failed key exchange is
+fatal rather than something SSH renegotiates. So if the first handshake fails for
+a reason that looks like missing crypto, the agent tries again with plain
+Diffie-Hellman, which every Windows can do. `KeyExchangeTests` pins all of this
+down.

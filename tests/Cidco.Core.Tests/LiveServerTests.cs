@@ -135,6 +135,27 @@ public class LiveServerTests
 
         Assert.False(result.Ok);
         Assert.Contains("refused the transfer", result.Message);
+
+        // A refusal still has to say which file, or the architect cannot tell
+        // which export CIDCO turned away.
+        Assert.Equal("readings.csv", result.FileName);
+        Assert.NotEqual("", result.Remote);
+    }
+
+    [SkippableFact]
+    public void A_refused_transfer_is_named_in_the_local_history()
+    {
+        Skip.IfNot(Available, "no CIDCO server configured");
+        var (_, file) = Export();
+        var folder = Path.Combine(Path.GetTempPath(), "cidco-live-db-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+
+        using var db = new Database(Path.Combine(folder, "agent.db"));
+        Sender(folder: "/not/the/registered/path").SendAndRecord(db, file);
+
+        var row = Assert.Single(db.RecentTransfers());
+        Assert.False(row.Accepted);
+        Assert.Equal("readings.csv", row.FileName);   // not an em dash
     }
 
     [SkippableFact]
