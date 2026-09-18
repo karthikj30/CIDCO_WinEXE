@@ -67,6 +67,21 @@ public sealed class Database : IDisposable
             );
             """);
         Execute("CREATE INDEX IF NOT EXISTS ix_transfers_sent_at ON transfers (sent_at DESC);");
+
+        // Added after the first release: "Refused" was being shown for an
+        // outage CIDCO had no part in. Older databases are upgraded in place.
+        AddColumnIfMissing("transfers", "outcome", "TEXT NOT NULL DEFAULT 'Sent'");
+    }
+
+    /// <summary>Adds a column to an existing table, doing nothing if it is already there.</summary>
+    private void AddColumnIfMissing(string table, string column, string definition)
+    {
+        using var check = _connection.CreateCommand();
+        check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $name;";
+        check.Parameters.AddWithValue("$name", column);
+        if (Convert.ToInt64(check.ExecuteScalar() ?? 0L) > 0) return;
+
+        Execute($"ALTER TABLE {table} ADD COLUMN {column} {definition};");
     }
 
     private void Execute(string sql)
@@ -107,8 +122,8 @@ public sealed class Database : IDisposable
     {
         using var command = _connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO transfers (file_name, remote_path, size_bytes, accepted, message, company_id, sent_at)
-            VALUES ($file, $remote, $size, $accepted, $message, $company, $sentAt);
+            INSERT INTO transfers (file_name, remote_path, size_bytes, accepted, message, company_id, sent_at, outcome)
+            VALUES ($file, $remote, $size, $accepted, $message, $company, $sentAt, $outcome);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("$file", record.FileName);
@@ -118,6 +133,7 @@ public sealed class Database : IDisposable
         command.Parameters.AddWithValue("$message", record.Message);
         command.Parameters.AddWithValue("$company", record.CompanyId);
         command.Parameters.AddWithValue("$sentAt", record.SentAt.ToString("o"));
+        command.Parameters.AddWithValue("$outcome", record.Outcome.ToString());
         return (long)(command.ExecuteScalar() ?? 0L);
     }
 
@@ -126,7 +142,7 @@ public sealed class Database : IDisposable
     {
         using var command = _connection.CreateCommand();
         command.CommandText = """
-            SELECT id, file_name, remote_path, size_bytes, accepted, message, company_id, sent_at
+            SELECT id, file_name, remote_path, size_bytes, accepted, message, company_id, sent_at, outcome
             FROM transfers ORDER BY id DESC LIMIT $limit;
             """;
         command.Parameters.AddWithValue("$limit", limit);
@@ -145,6 +161,9 @@ public sealed class Database : IDisposable
                 Message = reader.GetString(5),
                 CompanyId = reader.GetString(6),
                 SentAt = DateTimeOffset.Parse(reader.GetString(7)),
+                Outcome = Enum.TryParse<TransferOutcome>(reader.GetString(8), out var outcome)
+                    ? outcome
+                    : (reader.GetInt64(4) != 0 ? TransferOutcome.Sent : TransferOutcome.RefusedByCidco),
             });
         }
         return rows;
@@ -175,4 +194,20 @@ public sealed class TransferRecord
     public string Message { get; init; } = "";
     public string CompanyId { get; init; } = "";
     public DateTimeOffset SentAt { get; init; } = DateTimeOffset.Now;
+    public TransferOutcome Outcome { get; init; } = TransferOutcome.Sent;
+
+    /// <summary>
+    /// What to show in the Result column. An outage is not CIDCO refusing
+    /// anything, and saying so would send the architect looking in the wrong
+    /// place entirely.
+    /// </summary>
+    public string ResultLabel => Outcome switch
+    {
+        TransferOutcome.Sent => "Accepted",
+        TransferOutcome.Unreachable => "No answer",
+        TransferOutcome.BadCredentials => "Login refused",
+        TransferOutcome.RefusedByCidco => "Refused",
+        TransferOutcome.NothingToSend => "Nothing to send",
+        _ => Accepted ? "Accepted" : "Failed",
+    };
 }

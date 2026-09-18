@@ -21,7 +21,8 @@ internal sealed class AgentWindow : Form
     private readonly Database _db;
     private readonly Settings _settings;
 
-    private bool _connected;
+    private readonly ConnectionState _link = new();
+    private string _connectedTo = "";
     private bool _sending;
 
     private readonly TextBox _ip = new();
@@ -64,7 +65,11 @@ internal sealed class AgentWindow : Form
         if (!_db.IsInstalled())
             Log(false, "No setup found — run CIDCO_Setup first so the export folder and schedule are known.");
 
-        _timer.Tick += (_, _) => _ = SendAsync(null, scheduled: true);
+        _timer.Tick += async (_, _) =>
+        {
+            await SendAsync(null, scheduled: true);
+            ReArmTimer();
+        };
     }
 
     // -- layout ------------------------------------------------------------
@@ -313,7 +318,7 @@ internal sealed class AgentWindow : Form
         {
             row.FileName.Length > 0 ? row.FileName : "—",
             row.SentAt.LocalDateTime.ToString("dd/MM HH:mm:ss"),
-            row.Accepted ? "Accepted" : "Refused",
+            row.ResultLabel,
         })
         {
             ForeColor = row.Accepted ? Theme.Good : Theme.Bad,
@@ -351,11 +356,9 @@ internal sealed class AgentWindow : Form
             _company.Text.Trim(),
             _folder.Text.Trim()));
 
-        _connected = result.Ok;
-        _state.Text = result.Ok
-            ? $"Connected · {sender.CompanyId} → {sender.Host}:{sender.Port}"
-            : "Not connected";
-        _state.ForeColor = result.Ok ? Theme.Good : Theme.Bad;
+        _connectedTo = $"{sender.CompanyId} → {sender.Host}:{sender.Port}";
+        _link.Record(result, DateTimeOffset.Now);
+        ShowLinkState();
         Log(result.Ok, result.Message);
 
         if (result.Ok)
@@ -397,13 +400,21 @@ internal sealed class AgentWindow : Form
 
     private async Task SendAsync(FileInfo? file, bool scheduled = false)
     {
-        if (!_connected)
+        var now = DateTimeOffset.Now;
+
+        if (scheduled)
         {
-            // A scheduled tick that cannot connect should say so once, not
-            // fill the log with the same line every few seconds.
-            if (!scheduled) Log(false, "Connect to CIDCO first.");
+            // Nobody is watching, so the tick decides for itself whether this
+            // is a moment worth trying: not while waiting out a backoff, and
+            // not at all while something needs a person.
+            if (!_link.ShouldTry(now)) return;
+        }
+        else if (!_link.Healthy && _link.ConsecutiveFailures == 0)
+        {
+            Log(false, "Connect to CIDCO first.");
             return;
         }
+
         if (_sending) return; // a send is already in flight
         _sending = true;
 
@@ -412,19 +423,78 @@ internal sealed class AgentWindow : Form
             var sender = Sender();
             var result = await Task.Run(() => sender.SendAndRecord(_db, file));
 
-            Log(result.Ok, result.Message);
+            var wasDown = !_link.Healthy && _link.ConsecutiveFailures > 0;
+            _link.Record(result, DateTimeOffset.Now);
+
+            // Only say "back" when there was something to come back from.
+            if (result.Ok && wasDown) Log(true, "CIDCO is reachable again — sending resumed.");
+
+            LogTick(result, scheduled);
+            ShowLinkState();
+
             AddHistoryRow(new TransferRecord
             {
                 FileName = result.FileName.Length > 0 ? result.FileName : file?.Name ?? "",
                 Accepted = result.Ok,
                 Message = result.Message,
                 SentAt = result.SentAt,
+                Outcome = result.Outcome,
             });
         }
         finally
         {
             _sending = false;
         }
+    }
+
+    /// <summary>
+    /// Logs a tick's result without turning an outage into a wall of identical
+    /// lines. The first failure is reported in full; the ones after it only
+    /// when the wait between attempts changes.
+    /// </summary>
+    private void LogTick(SendResult result, bool scheduled)
+    {
+        if (result.Ok || !scheduled)
+        {
+            Log(result.Ok, result.Message);
+            return;
+        }
+
+        if (result.Outcome == TransferOutcome.NothingToSend) return;   // nothing happened
+
+        if (_link.ConsecutiveFailures <= 1 || _link.ConsecutiveFailures % 4 == 0)
+            Log(false, result.Message);
+    }
+
+    /// <summary>
+    /// Sets how soon the next tick comes.
+    ///
+    /// While the link is up that is the schedule the architect chose. While it
+    /// is down it is the backoff instead, because a three-hourly schedule that
+    /// waits three hours to notice CIDCO is back is no use to anyone — the
+    /// retry has to be able to outpace the schedule.
+    /// </summary>
+    private void ReArmTimer()
+    {
+        var seconds = _link.Healthy || _link.Blocked
+            ? _settings.IntervalSeconds
+            : (int)Math.Ceiling(_link.CurrentBackoff.TotalSeconds);
+
+        _timer.Interval = Math.Max(1, seconds) * 1000;
+
+        if (_timer.Enabled)
+        {
+            _scheduleText.Text = _link.Healthy
+                ? $"Sending automatically every {Schedule.Describe(_settings.IntervalSeconds)}"
+                : $"Retrying every {Schedule.Describe(seconds)} until CIDCO answers";
+        }
+    }
+
+    /// <summary>Puts the link's state on the status line, in its own colour.</summary>
+    private void ShowLinkState()
+    {
+        _state.Text = _link.Describe(_connectedTo);
+        _state.ForeColor = _link.Healthy && _link.NeedsAttention is null ? Theme.Good : Theme.Bad;
     }
 
     private void ToggleAuto()
@@ -438,14 +508,14 @@ internal sealed class AgentWindow : Form
             return;
         }
 
-        if (!_connected)
+        if (!_link.Healthy)
         {
             Log(false, "Connect to CIDCO before starting the schedule.");
             return;
         }
 
         var every = Schedule.Describe(_settings.IntervalSeconds);
-        _timer.Interval = Math.Max(1, _settings.IntervalSeconds) * 1000;
+        ReArmTimer();
         _timer.Start();
         _auto.Text = "Stop automatic sending";
         _scheduleText.Text = $"Sending automatically every {every}";

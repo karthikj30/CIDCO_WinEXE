@@ -134,6 +134,31 @@ in SQLite, last night's failures are still on screen this morning.
 The password is kept only for the running session. It is never written to the
 database — `DatabaseLifecycleTests` reads the raw file back to prove it.
 
+## Staying connected
+
+The agent is meant to be left running for months on a site PC, so it does not
+treat "connected" as something switched on once. A three-hourly schedule will
+meet a rebooted server, a dropped link and a changed address, and nobody will be
+watching to press **Connect** afterwards.
+
+What it does depends on what actually failed:
+
+| What happened | What the agent does |
+| --- | --- |
+| Lost the network, or CIDCO is down | Keeps trying, backing off 5s → 15s → 45s → 2m → 5m → 15m, and resumes the moment CIDCO answers |
+| CIDCO rejected the password | Stops and says so. Retrying cannot fix a password, and hammering their server with a rejected credential is rude |
+| CIDCO refused the transfer | Stops and says which field they disagreed with. The link is fine; the registration does not match |
+| No CSV in the folder yet | Nothing. Not a failure — the next tick looks again |
+
+While the link is down the agent retries on the **backoff**, not the schedule,
+so a three-hourly sender notices CIDCO is back in seconds rather than hours. The
+status line says which of those it is in — *Connected*, *Lost CIDCO —
+reconnecting (attempt 2, next in 15s)*, or *Needs attention* — and an outage is
+logged once rather than once per attempt.
+
+Nothing is lost while CIDCO is away: the agent sends the newest export when it
+gets back in, and every attempt, successful or not, is in the local history.
+
 ## 3. What CIDCO does with it
 
 CIDCO revalidates **every single transfer**, not just the first one, against the
@@ -245,7 +270,11 @@ The transfer log names the cause. The three you are most likely to meet:
 | --- | --- |
 | **Something is listening on *host:port*, but it is not an SFTP server** | The TCP connection worked, but whatever answered never sent an SSH greeting. Almost always the wrong port — the portal's rather than the SFTP intake's. Leave the port off the address entirely and the agent will look for the intake itself. |
 | **Nothing is listening on *host:port*** | The port is closed. Either the SFTP service is not running on CIDCO's side, or a firewall is dropping it. |
-| **That username and password were refused by CIDCO** | You reached the SFTP server — the address and port are right — and the credentials are wrong. |
+| **That username and password were refused by CIDCO** | You reached the SFTP server — the address is right — and the credentials are wrong. The agent stops here rather than re-presenting a rejected password until the account locks. |
+
+The **Result** column in the CIDCO pane says which of these each attempt was:
+`Accepted`, `No answer` (could not reach CIDCO), `Refused` (CIDCO turned the
+file away), or `Login refused`.
 
 To check a port by hand from the architect's PC, in PowerShell:
 

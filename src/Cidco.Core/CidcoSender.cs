@@ -3,6 +3,32 @@ using Renci.SshNet.Common;
 
 namespace Cidco.Core;
 
+/// <summary>
+/// What kind of thing happened, as opposed to what it said.
+///
+/// The agent runs unattended, so it has to decide on its own whether trying
+/// again could possibly help. Losing the network is worth waiting out; a
+/// password CIDCO rejected, or a company id they do not recognise, will fail
+/// exactly the same way forever and needs a person.
+/// </summary>
+public enum TransferOutcome
+{
+    /// <summary>CIDCO took the file.</summary>
+    Sent,
+
+    /// <summary>Could not get to CIDCO at all. Worth trying again later.</summary>
+    Unreachable,
+
+    /// <summary>CIDCO answered and rejected the credentials. A person must fix this.</summary>
+    BadCredentials,
+
+    /// <summary>CIDCO took the connection and refused the transfer. A person must fix this.</summary>
+    RefusedByCidco,
+
+    /// <summary>There was no export to send. Not a failure — just nothing to do yet.</summary>
+    NothingToSend,
+}
+
 /// <summary>What came of one attempt to reach CIDCO.</summary>
 public sealed record SendResult(bool Ok, string Message)
 {
@@ -10,8 +36,13 @@ public sealed record SendResult(bool Ok, string Message)
     public string Remote { get; init; } = "";
     public long SizeBytes { get; init; }
     public DateTimeOffset SentAt { get; init; } = DateTimeOffset.Now;
+    public TransferOutcome Outcome { get; init; } = TransferOutcome.Sent;
 
-    public static SendResult Failed(string message) => new(false, message);
+    /// <summary>Whether trying the same thing again could plausibly work.</summary>
+    public bool WorthRetrying => Outcome is TransferOutcome.Unreachable;
+
+    public static SendResult Failed(string message, TransferOutcome outcome) =>
+        new(false, message) { Outcome = outcome };
 }
 
 /// <summary>
@@ -213,11 +244,11 @@ public sealed class CidcoSender
         }
         catch (SshAuthenticationException)
         {
-            return SendResult.Failed("That username and password were refused by CIDCO.");
+            return SendResult.Failed("That username and password were refused by CIDCO.", TransferOutcome.BadCredentials);
         }
         catch (Exception error)
         {
-            return SendResult.Failed(DiagnoseConnection(error));
+            return SendResult.Failed(DiagnoseConnection(error), TransferOutcome.Unreachable);
         }
     }
 
@@ -226,13 +257,13 @@ public sealed class CidcoSender
     {
         var source = file ?? ExportPicker.Newest(CsvFolder);
         if (source is null)
-            return SendResult.Failed($"No .csv found in {(string.IsNullOrWhiteSpace(CsvFolder) ? "(no folder set)" : CsvFolder)}");
+            return SendResult.Failed($"No .csv found in {(string.IsNullOrWhiteSpace(CsvFolder) ? "(no folder set)" : CsvFolder)}", TransferOutcome.NothingToSend);
 
         source.Refresh();
         if (!source.Exists)
-            return SendResult.Failed($"{source.Name} is no longer there") with { FileName = source.Name };
+            return SendResult.Failed($"{source.Name} is no longer there", TransferOutcome.NothingToSend) with { FileName = source.Name };
         if (!AqiCsv.IsAccepted(source.Name))
-            return SendResult.Failed($"{source.Name} is not a .csv or .xlsx file") with { FileName = source.Name };
+            return SendResult.Failed($"{source.Name} is not a .csv or .xlsx file", TransferOutcome.NothingToSend) with { FileName = source.Name };
 
         var target = RemotePath.For(CompanyId, CsvFolder, source.Name);
 
@@ -248,12 +279,12 @@ public sealed class CidcoSender
         }
         catch (SshAuthenticationException)
         {
-            return SendResult.Failed("That username and password were refused by CIDCO.")
+            return SendResult.Failed("That username and password were refused by CIDCO.", TransferOutcome.BadCredentials)
                 with { FileName = source.Name, Remote = target };
         }
         catch (Exception error)
         {
-            return SendResult.Failed(DiagnoseConnection(error))
+            return SendResult.Failed(DiagnoseConnection(error), TransferOutcome.Unreachable)
                 with { FileName = source.Name, Remote = target };
         }
 
@@ -269,7 +300,7 @@ public sealed class CidcoSender
         {
             // A rejection from CIDCO arrives as a permission error. Say so in
             // the architect's terms rather than leaking an SSH status code.
-            return SendResult.Failed($"{source.Name} — CIDCO refused the transfer ({Explain(error)})")
+            return SendResult.Failed($"{source.Name} — CIDCO refused the transfer ({Explain(error)})", TransferOutcome.RefusedByCidco)
                 with { FileName = source.Name, Remote = target };
         }
 
@@ -294,6 +325,7 @@ public sealed class CidcoSender
             Message = result.Message,
             CompanyId = CompanyId,
             SentAt = result.SentAt,
+            Outcome = result.Outcome,
         });
         return result;
     }
