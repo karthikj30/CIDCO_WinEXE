@@ -83,7 +83,7 @@ public class IntakeDiscoveryTests
             "cidco@example.com", "not-the-password", "ABCD123", "/tmp", TimeSpan.FromSeconds(6));
 
         Assert.False(result.Ok);
-        Assert.Contains("refused by CIDCO", result.Message);
+        Assert.Contains("refused that username and password", result.Message);
 
         // It stopped at the server that answered, rather than walking on.
         Assert.Equal(ServerAddress.StandardPort, sender.Port);

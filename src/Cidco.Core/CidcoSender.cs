@@ -131,7 +131,7 @@ public sealed class CidcoSender
             }
 
             // Wrong credentials means this IS the server. Stop.
-            if (result.Message.Contains("refused by CIDCO", StringComparison.Ordinal))
+            if (result.Outcome == TransferOutcome.BadCredentials)
                 return (sender, result);
 
             firstAnswer ??= result;
@@ -244,7 +244,7 @@ public sealed class CidcoSender
         }
         catch (SshAuthenticationException)
         {
-            return SendResult.Failed("That username and password were refused by CIDCO.", TransferOutcome.BadCredentials);
+            return SendResult.Failed(RefusedLogin(), TransferOutcome.BadCredentials);
         }
         catch (Exception error)
         {
@@ -279,7 +279,7 @@ public sealed class CidcoSender
         }
         catch (SshAuthenticationException)
         {
-            return SendResult.Failed("That username and password were refused by CIDCO.", TransferOutcome.BadCredentials)
+            return SendResult.Failed(RefusedLogin(), TransferOutcome.BadCredentials)
                 with { FileName = source.Name, Remote = target };
         }
         catch (Exception error)
@@ -328,6 +328,26 @@ public sealed class CidcoSender
             Outcome = result.Outcome,
         });
         return result;
+    }
+
+    /// <summary>
+    /// A rejected login, saying which server did the rejecting.
+    ///
+    /// The agent finds the port itself, so "refused" on its own leaves the
+    /// architect unable to tell CIDCO's intake from some other SSH server that
+    /// happened to answer — a machine's own sshd on port 22 will reject a
+    /// CIDCO user id in exactly the same words. Naming the endpoint is what
+    /// makes those two tellable apart.
+    /// </summary>
+    private string RefusedLogin()
+    {
+        var where = $"{Host}:{Port}";
+        var aside = Port == 22
+            ? " Port 22 is often a machine's own SSH service rather than CIDCO's intake, " +
+              "which would reject a CIDCO user id like this. Check with CIDCO which port their SFTP intake is on."
+            : "";
+
+        return $"{where} refused that username and password.{aside}";
     }
 
     /// <summary>

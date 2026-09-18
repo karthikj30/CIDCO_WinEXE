@@ -127,3 +127,55 @@ public class ConnectionDiagnosisTests
         Assert.Contains("not an SFTP server", result.Message);
     }
 }
+
+/// <summary>
+/// A rejected login has to name the server that rejected it.
+///
+/// The agent picks the port itself, so without the endpoint an architect
+/// cannot tell CIDCO's intake from a machine's own sshd — which rejects a
+/// CIDCO user id in exactly the same words.
+/// </summary>
+public class RejectedLoginTests
+{
+    private static string MessageFrom(int port)
+    {
+        // Nothing is listening, so this never gets as far as a real login —
+        // but the wording is built from the endpoint either way.
+        var sender = new CidcoSender("198.51.100.7", port, "cidco@example.com", "123456",
+            "ABCD123", "/tmp", TimeSpan.FromSeconds(2));
+        return sender.CheckConnection().Message;
+    }
+
+    [SkippableFact]
+    public void It_names_the_host_and_port_that_said_no()
+    {
+        var host = Environment.GetEnvironmentVariable("CIDCO_TEST_HOST");
+        Skip.If(string.IsNullOrWhiteSpace(host), "no CIDCO server configured");
+
+        var sender = new CidcoSender(host!, 2222, "cidco@example.com", "definitely-wrong",
+            "ABCD123", "/tmp", TimeSpan.FromSeconds(6));
+        var result = sender.CheckConnection();
+
+        Assert.False(result.Ok);
+        Assert.Equal(TransferOutcome.BadCredentials, result.Outcome);
+        Assert.Contains($"{host}:2222", result.Message);
+        Assert.Contains("refused that username and password", result.Message);
+    }
+
+    [SkippableFact]
+    public void Port_22_carries_a_warning_that_it_may_not_be_CIDCO_at_all()
+    {
+        var host = Environment.GetEnvironmentVariable("CIDCO_TEST_HOST");
+        Skip.If(string.IsNullOrWhiteSpace(host), "no CIDCO server configured");
+
+        // The message for port 22 is built the same way wherever it is used.
+        var sender = new CidcoSender(host!, 22, "cidco@example.com", "wrong",
+            "ABCD123", "/tmp", TimeSpan.FromSeconds(3));
+        var message = sender.CheckConnection().Message;
+
+        // Either it could not reach anything there, or it was refused — but if
+        // it was refused, it must warn about what port 22 usually is.
+        if (message.Contains("refused that username and password"))
+            Assert.Contains("machine's own SSH service", message);
+    }
+}

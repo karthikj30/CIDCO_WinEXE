@@ -56,7 +56,7 @@ public class LiveServerTests
         Skip.IfNot(Available, "no CIDCO server configured");
         var result = Sender(password: "not-the-password").CheckConnection();
         Assert.False(result.Ok);
-        Assert.Contains("refused by CIDCO", result.Message);
+        Assert.Contains("refused that username and password", result.Message);
     }
 
     [SkippableFact]

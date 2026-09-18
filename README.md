@@ -270,7 +270,7 @@ The transfer log names the cause. The three you are most likely to meet:
 | --- | --- |
 | **Something is listening on *host:port*, but it is not an SFTP server** | The TCP connection worked, but whatever answered never sent an SSH greeting. Almost always the wrong port — the portal's rather than the SFTP intake's. Leave the port off the address entirely and the agent will look for the intake itself. |
 | **Nothing is listening on *host:port*** | The port is closed. Either the SFTP service is not running on CIDCO's side, or a firewall is dropping it. |
-| **That username and password were refused by CIDCO** | You reached the SFTP server — the address is right — and the credentials are wrong. The agent stops here rather than re-presenting a rejected password until the account locks. |
+| ***host:port* refused that username and password** | You reached an SSH server and it rejected the login. Check the port it names: if it says `:22`, the agent may have found the machine's own SSH service rather than CIDCO's intake, which would reject a CIDCO user id in just this way. The agent stops here rather than re-presenting a rejected password until the account locks. |
 
 The **Result** column in the CIDCO pane says which of these each attempt was:
 `Accepted`, `No answer` (could not reach CIDCO), `Refused` (CIDCO turned the
