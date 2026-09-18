@@ -23,6 +23,7 @@ internal sealed class AgentWindow : Form
 
     private readonly ConnectionState _link = new();
     private string _connectedTo = "";
+    private ICidcoTransport? _transport;
     private bool _sending;
 
     private readonly TextBox _ip = new();
@@ -223,11 +224,11 @@ internal sealed class AgentWindow : Form
 
     private void LoadSettingsIntoFields()
     {
-        // The port is shown only when it is not CIDCO's usual one, so the
-        // common case is a bare address and the unusual one is still visible.
-        _ip.Text = _settings.PortOrDefault == ServerAddress.StandardPort
-            ? _settings.IpOrDefault
-            : $"{_settings.IpOrDefault}:{_settings.PortOrDefault}";
+        // Exactly what was typed last time. Rebuilding it from a host and a
+        // port appended the port a second time to an address that already
+        // carried one — "http://host:3000" came back as "http://host:3000:3000",
+        // which is not an address at all.
+        _ip.Text = _settings.IpOrDefault;
         _username.Text = _settings.UsernameOrDefault;
         _company.Text = _settings.CompanyIdOrDefault;
         _folder.Text = _settings.CsvFolder;
@@ -348,15 +349,35 @@ internal sealed class AgentWindow : Form
         _connect.Enabled = false;
         _state.Text = "Connecting\u2026";
 
-        // Only an address was given, so let the sender look for the intake.
-        var (sender, result) = await Task.Run(() => CidcoSender.FindIntake(
-            address,
-            _username.Text.Trim(),
-            _password.Text,
-            _company.Text.Trim(),
-            _folder.Text.Trim()));
+        ICidcoTransport sender;
+        SendResult result;
+        try
+        {
+            // The address says which door: http:// goes to CIDCO's web portal,
+            // anything else to their SFTP intake.
+            (sender, result) = await Task.Run(() => CidcoTransports.Connect(
+                address,
+                _username.Text.Trim(),
+                _password.Text,
+                _company.Text.Trim(),
+                _folder.Text.Trim()));
+        }
+        catch (Exception error)
+        {
+            // Anything unexpected has to come back to the architect and give
+            // them their button back. Being stranded on "Connecting..." for
+            // ever is the one outcome with no way out of it.
+            _link.Record(
+                SendResult.Failed($"Could not use that address - {error.Message}", TransferOutcome.Unreachable),
+                DateTimeOffset.Now);
+            ShowLinkState();
+            Log(false, $"Could not use \"{_ip.Text.Trim()}\" - {error.Message}");
+            _connect.Enabled = true;
+            return;
+        }
 
-        _connectedTo = $"{sender.CompanyId} → {sender.Host}:{sender.Port}";
+        _transport = result.Ok ? sender : null;
+        _connectedTo = sender.Describe;
         _link.Record(result, DateTimeOffset.Now);
         ShowLinkState();
         Log(result.Ok, result.Message);
@@ -365,18 +386,23 @@ internal sealed class AgentWindow : Form
         {
             // Remember everything except the password, so the next run is a
             // matter of typing the password and pressing Connect.
-            _settings.DesignatedIp = sender.Host;
-            _settings.Port = sender.Port;
-            _settings.Username = sender.Username;
-            _settings.CompanyId = sender.CompanyId;
-            _settings.CsvFolder = sender.CsvFolder;
-            _settings.Save(_db);
+            _settings.DesignatedIp = _ip.Text.Trim();
+            _settings.Username = _username.Text.Trim();
+            _settings.CompanyId = _company.Text.Trim();
+            _settings.CsvFolder = _folder.Text.Trim();
 
-            // Show the port back only when it was not the usual one, so the
-            // field keeps reading as a plain address in the common case.
-            _ip.Text = sender.Port == ServerAddress.StandardPort
-                ? sender.Host
-                : $"{sender.Host}:{sender.Port}";
+            // An SFTP intake found on a port worth remembering; the portal
+            // carries its port in the address already.
+            if (sender is CidcoSender found)
+            {
+                _settings.Port = found.Port;
+                _ip.Text = found.Port == ServerAddress.StandardPort
+                    ? found.Host
+                    : $"{found.Host}:{found.Port}";
+                _settings.DesignatedIp = _ip.Text;
+            }
+
+            _settings.Save(_db);
         }
 
         _connect.Enabled = true;
@@ -420,7 +446,7 @@ internal sealed class AgentWindow : Form
 
         try
         {
-            var sender = Sender();
+            var sender = _transport ?? Sender();
             var result = await Task.Run(() => sender.SendAndRecord(_db, file));
 
             var wasDown = !_link.Healthy && _link.ConsecutiveFailures > 0;

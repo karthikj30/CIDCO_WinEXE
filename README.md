@@ -104,7 +104,7 @@ Fill in the connection bar with what CIDCO emailed:
 
 | Field | Value |
 | --- | --- |
-| Designated IP | CIDCO's server address — the one in the email, e.g. `13.207.123.12` |
+| Designated IP | CIDCO's server address — the one in the email, e.g. `13.207.123.12`, or `http://13.207.123.12:8010` to use their web portal |
 | User ID | `cidco@example.com` |
 | Password | `123456` |
 | Company ID | `ABCD123` |
@@ -134,6 +134,30 @@ in SQLite, last night's failures are still on screen this morning.
 
 The password is kept only for the running session. It is never written to the
 database — `DatabaseLifecycleTests` reads the raw file back to prove it.
+
+## Two ways to reach CIDCO
+
+The same file, the same credentials and the same checks — two different doors,
+and the address says which:
+
+| What you type | Where it goes |
+| --- | --- |
+| `13.207.123.12` | CIDCO's **SFTP intake**, port 2222 |
+| `13.207.123.12:8010` | The SFTP intake on a port CIDCO named |
+| `http://13.207.123.12:8010` | CIDCO's **web portal**, over HTTP |
+| `https://cidco.example.gov.in` | The portal over HTTPS |
+
+The portal door exists because its port is very often the one already open. The
+SFTP intake is a separate service on its own port, and a firewall that lets the
+portal through frequently does not let the intake through. Rather than leave an
+architect unable to send anything, the agent can hand the same file to the same
+intake over HTTP — CIDCO validates it identically and files it in the same
+place, recording only that it arrived by the portal rather than by SFTP.
+
+The choice is always written, never guessed. An agent that silently changed
+protocol because something unexpected answered would be impossible to reason
+about the first time it surprised somebody. The status line says which door is
+in use: *Connected · ABCD123 → 13.207.123.12:8010 (web portal)*.
 
 ## Staying connected
 

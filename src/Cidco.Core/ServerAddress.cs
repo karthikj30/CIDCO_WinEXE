@@ -2,6 +2,16 @@ using System.Globalization;
 
 namespace Cidco.Core;
 
+/// <summary>Which door into CIDCO a transfer goes through.</summary>
+public enum Transport
+{
+    /// <summary>CIDCO's SFTP intake, on its own port.</summary>
+    Sftp,
+
+    /// <summary>The upload endpoint on CIDCO's web portal.</summary>
+    Portal,
+}
+
 /// <summary>
 /// The designated address CIDCO sends the architect, as one thing to type.
 ///
@@ -12,6 +22,17 @@ namespace Cidco.Core;
 /// </summary>
 public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
 {
+    /// <summary>
+    /// Which door into CIDCO this address names.
+    ///
+    /// Written by the architect, not guessed: an address with http:// or
+    /// https:// in front of it goes to the portal, anything else to the SFTP
+    /// intake. Switching protocol behind someone's back would be worse than
+    /// asking for five characters.
+    /// </summary>
+    public Transport Transport { get; init; } = Transport.Sftp;
+
+    public bool IsPortal => Transport == Transport.Portal;
     /// <summary>Where CIDCO's SFTP intake listens unless told otherwise.</summary>
     public const int StandardPort = 2222;
 
@@ -36,6 +57,15 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
     /// <summary>The same address on a different port.</summary>
     public ServerAddress On(int port) => this with { Port = port };
 
+    /// <summary>The portal's base URL, for the HTTP door.</summary>
+    public Uri PortalBase() => new UriBuilder(
+        Transport == Transport.Portal && Secure ? "https" : "http",
+        Host,
+        Port).Uri;
+
+    /// <summary>Whether https was asked for. Only meaningful for the portal.</summary>
+    public bool Secure { get; init; }
+
     /// <summary>
     /// Reads what the architect typed. Accepts a bare address, one with a port
     /// after a colon, a bracketed IPv6 address, and an sftp:// or ssh:// URL
@@ -53,10 +83,30 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
             return false;
         }
 
-        // Tolerate a pasted URL, and a trailing slash with it.
-        foreach (var scheme in new[] { "sftp://", "ssh://", "//" })
-            if (value.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
-                value = value[scheme.Length..];
+        // The scheme, when there is one, says which door to use.
+        var transport = Transport.Sftp;
+        var secure = false;
+        var defaultPort = StandardPort;
+
+        if (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            transport = Transport.Portal;
+            secure = true;
+            defaultPort = 443;
+            value = value["https://".Length..];
+        }
+        else if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+            transport = Transport.Portal;
+            defaultPort = 80;
+            value = value["http://".Length..];
+        }
+        else
+        {
+            foreach (var scheme in new[] { "sftp://", "ssh://", "//" })
+                if (value.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+                    value = value[scheme.Length..];
+        }
         value = value.TrimEnd('/');
 
         // A path or credentials pasted along with the address are not ours.
@@ -72,7 +122,7 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
         }
 
         var host = value;
-        var port = StandardPort;
+        var port = defaultPort;
         var portWasGiven = false;
 
         if (value.StartsWith('['))
@@ -121,7 +171,18 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
             return false;
         }
 
-        address = new ServerAddress(host, port, portWasGiven);
+        // A host may only keep colons if it really is an IPv6 address. Without
+        // this, "host:3000:3000" parses into a host nothing can be built from,
+        // and the failure surfaces later as a crash rather than as a sentence
+        // telling the architect their address is wrong.
+        if (host.Contains(':') && !System.Net.IPAddress.TryParse(host, out _))
+        {
+            problem = $"\"{host}\" is not an address. Write it as a host with at most one port, like " +
+                      $"\"13.207.123.12\" or \"13.207.123.12:{StandardPort}\".";
+            return false;
+        }
+
+        address = new ServerAddress(host, port, portWasGiven) { Transport = transport, Secure = secure };
         return true;
     }
 
@@ -145,7 +206,9 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
     /// </summary>
     public IReadOnlyList<int> PortsToTry()
     {
-        if (PortWasGiven) return new[] { Port };
+        // The portal is named outright, scheme and all, so there is nothing to
+        // search for.
+        if (PortWasGiven || IsPortal) return new[] { Port };
 
         var ports = new List<int> { Port };
         foreach (var candidate in CandidatePorts)

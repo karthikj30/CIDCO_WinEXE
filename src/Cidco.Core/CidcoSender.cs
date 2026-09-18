@@ -52,7 +52,7 @@ public sealed record SendResult(bool Ok, string Message)
 /// is what CIDCO answered, which is why a refusal is surfaced verbatim rather
 /// than flattened into "failed".
 /// </summary>
-public sealed class CidcoSender
+public sealed class CidcoSender : ICidcoTransport
 {
     public string Host { get; }
     public int Port { get; }
@@ -79,6 +79,9 @@ public sealed class CidcoSender
         CsvFolder = csvFolder.Trim();
         Timeout = timeout ?? TimeSpan.FromSeconds(20);
     }
+
+    /// <summary>Where this is sending, for the status line.</summary>
+    public string Describe => $"{CompanyId} \u2192 {Host}:{Port}";
 
     public static CidcoSender From(Settings settings) => new(
         settings.IpOrDefault,
