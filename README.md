@@ -110,10 +110,11 @@ Fill in the connection bar with what CIDCO emailed:
 | Company ID | `ABCD123` |
 | File path | prefilled from the installer, e.g. `C:\CIDCO\exports` |
 
-There is no port to fill in. CIDCO's intake is on the same port everywhere, and
-if it turns out not to be, the agent looks for it: when the usual port has
-nothing on it, it tries the others CIDCO is ever on and says which one it found
-— `Connected to CIDCO at 13.207.123.12:2222 (found on port 2222).`
+There is no port to fill in. CIDCO's intake is on port 2222, and that is the
+only port the agent will try on a guess — deliberately. Port 22 is the operating
+system's own SSH service on most servers, and presenting CIDCO credentials there
+proves nothing while being exactly what fail2ban bans; the ban would land on the
+architect's address and lock them out of the real intake on the same host.
 
 If CIDCO ever does put an instance somewhere non-standard, type it after a
 colon and the agent takes you at your word and tries only that:

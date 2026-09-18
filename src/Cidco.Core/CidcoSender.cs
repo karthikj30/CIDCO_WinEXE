@@ -126,7 +126,7 @@ public sealed class CidcoSender
                 // otherwise the architect has no idea what they are connected to.
                 var message = port == ports[0] || ports.Count == 1
                     ? result.Message
-                    : $"{result.Message} (found on port {port}).";
+                    : $"{result.Message.TrimEnd('.')} \u2014 found on port {port}.";
                 return (sender, result with { Message = message });
             }
 
@@ -137,9 +137,16 @@ public sealed class CidcoSender
             firstAnswer ??= result;
         }
 
-        // Nothing answered as SFTP. Report what the first, most likely port
-        // said rather than whatever the last long shot happened to say.
-        return (attempted!, firstAnswer!);
+        // Nothing answered as SFTP. Report the first, most likely port rather
+        // than whatever the last long shot happened to say, and point at the
+        // two things that are actually wrong when this happens.
+        var tried = string.Join(", ", ports);
+        var advice =
+            $" Tried port {tried} on {address.Host}. Ask CIDCO to confirm their SFTP intake is running, " +
+            $"and on which port \u2014 if it is not {ServerAddress.StandardPort}, add it to the address like " +
+            $"\"{address.Host}:8010\".";
+
+        return (attempted!, firstAnswer! with { Message = firstAnswer!.Message + advice });
     }
 
     /// <summary>

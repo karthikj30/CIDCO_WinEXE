@@ -113,13 +113,26 @@ public class ServerAddressTests
     // --- which ports get tried --------------------------------------------
 
     [Fact]
-    public void Only_an_address_means_the_usual_ports_are_worth_trying()
+    public void An_address_alone_tries_CIDCOs_standard_port()
     {
         var ports = Parse("13.207.123.12").PortsToTry();
-        Assert.Equal(2222, ports[0]);           // the standard one first
-        Assert.Contains(22, ports);             // then plain SSH
-        Assert.Equal(ports.Distinct().Count(), ports.Count);
+        Assert.Equal(new[] { 2222 }, ports);
     }
+
+    [Fact]
+    public void Port_22_is_never_tried_on_a_guess()
+    {
+        // It is the operating system's own SSH service, not CIDCO's intake.
+        // Presenting CIDCO credentials there proves nothing and is what
+        // fail2ban bans — and the ban would land on the architect's address,
+        // locking them out of the real intake on the same host.
+        Assert.DoesNotContain(22, Parse("13.207.123.12").PortsToTry());
+        Assert.DoesNotContain(22, ServerAddress.CandidatePorts);
+    }
+
+    [Fact]
+    public void An_architect_who_knows_it_is_on_22_can_still_say_so() =>
+        Assert.Equal(new[] { 22 }, Parse("13.207.123.12:22").PortsToTry());
 
     [Fact]
     public void An_explicit_port_is_taken_at_its_word_and_nothing_else_is_tried()

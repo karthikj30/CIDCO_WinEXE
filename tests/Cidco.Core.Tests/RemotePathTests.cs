@@ -39,7 +39,30 @@ public class RemotePathTests
             "/ABCD123/C:/CIDCO/exports/readings.csv",
             RemotePath.For("  ABCD123  ", "  C:/CIDCO/exports/  ", "readings.csv"));
 
+    [Fact]
+    public void A_network_share_is_sent_as_its_server_and_share()
+    {
+        // Architects commonly export to a UNC share rather than a local disk.
+        Assert.Equal(
+            "/ABCD123/192.168.1.100/common/karthik/readings.csv",
+            RemotePath.For("ABCD123", @"\\192.168.1.100\common\karthik", "readings.csv"));
+    }
+
+    [Fact]
+    public void A_named_network_share_works_the_same_way() =>
+        Assert.Equal(
+            "/ABCD123/fileserver/common/aqi/readings.csv",
+            RemotePath.For("ABCD123", @"\\fileserver\common\aqi", "readings.csv"));
+
+    [Fact]
+    public void A_share_does_not_leave_an_empty_segment_from_its_double_slash()
+    {
+        var path = RemotePath.For("ABCD123", @"\\192.168.1.100\common", "readings.csv");
+        Assert.DoesNotContain("//", path.TrimStart('/'));
+    }
+
     [Theory]
+    [InlineData(@"\\192.168.1.100\common\karthik", "//192.168.1.100/common/karthik")]
     [InlineData(@"C:\CIDCO\exports\", "C:/CIDCO/exports")]
     [InlineData("/srv/aqi/", "/srv/aqi")]
     [InlineData("", "")]

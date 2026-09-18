@@ -16,11 +16,20 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
     public const int StandardPort = 2222;
 
     /// <summary>
-    /// Ports worth trying when the architect gave only an address: the
-    /// standard one, then plain SSH, which is where an intake fronted by a
-    /// firewall rule usually ends up.
+    /// The ports tried when the architect gave only an address.
+    ///
+    /// Just the one, deliberately. Port 22 was in here and had to come out: on
+    /// a Linux server that is the operating system's own SSH service, not
+    /// CIDCO's intake, so the agent was presenting CIDCO credentials to a
+    /// machine that has never heard of them. Besides being useless, repeated
+    /// failed logins there are what fail2ban exists to ban — and a ban lands
+    /// on the architect's address, which would then lock them out of the real
+    /// intake on that same host.
+    ///
+    /// An intake somewhere else is reached by typing the port, not by guessing
+    /// at it.
     /// </summary>
-    public static readonly IReadOnlyList<int> CandidatePorts = new[] { StandardPort, 22 };
+    public static readonly IReadOnlyList<int> CandidatePorts = new[] { StandardPort };
 
     public override string ToString() => Host.Contains(':') ? $"[{Host}]:{Port}" : $"{Host}:{Port}";
 
