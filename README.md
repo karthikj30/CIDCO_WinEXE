@@ -6,7 +6,7 @@ up the AQI export from a folder on their own machine and sends it to CIDCO over
 SFTP channel only.
 
 The architect never sees CIDCO's database. The agent's only job is to hand the
-file over; CIDCO validates it and stores it on their side.
+file over and show them what CIDCO answered.
 
 ```
   architect's PC                              CIDCO
@@ -22,41 +22,55 @@ file over; CIDCO validates it and stores it on their side.
                                                      ▼
                                           data table:  ABCD123
                                                        └ 2026-09-September
-                                                         └ 2026-09-18_Friday_06-55-58
+                                                         └ 2026-09-18_Friday_07-25-06
                                                            └ readings.csv
 ```
 
-## What's in the repo
+Built with **C# on .NET 8**, WinForms for the two screens, **SQLite** for the
+agent's own settings and history, and SSH.NET for the transfer.
 
-| File | What it is |
+## One file, one install
+
+`build.bat` produces a single **self-contained** executable:
+
+```
+dist\CIDCO_AQI_Agent.exe
+```
+
+Self-contained means the .NET runtime is inside it — the architect's PC needs
+nothing installed first. That one file is both the installer and the program:
+
+- **Run it the first time** → the setup wizard, which installs it properly:
+  copies itself to `%LOCALAPPDATA%\Programs\CIDCO AQI Agent`, makes Start Menu
+  and desktop shortcuts, and registers in **Apps & features** so it uninstalls
+  like any other Windows program.
+- **Run it afterwards** (Start Menu, desktop, or at sign-in) → the transfer
+  window.
+
+Everything is written under the user's own profile, so **no administrator prompt**
+— an architect on a locked-down site PC can still install it.
+
+| Flag | What it does |
 | --- | --- |
-| `CIDCO_Setup.bat` | Runs the installer dialog straight from source |
-| `run_agent.bat` | Opens the transfer window |
-| `build.bat` | Builds `CIDCO_Setup.exe` and `CIDCO_Agent.exe` with PyInstaller |
-| `cidco/installer.py` | The setup wizard (role → folder → schedule → install) |
-| `cidco/agent.py` | The WinSCP-style transfer window |
-| `cidco/sender.py` | The SFTP upload itself, and the CSV columns |
-| `cidco/schedule.py` | The thirteen scheduler intervals |
-| `cidco/config.py` | Where the installer's choices are saved |
-| `sample/readings.csv` | A CSV with the exact columns CIDCO reads |
-| `tests/test_core.py` | Headless tests for all of the above |
+| *(none)* | Setup on first run, the agent afterwards |
+| `--setup` | Re-runs the wizard to change the folder or the schedule |
+| `--uninstall` | What Apps & features calls; removes shortcuts, the sign-in entry and the listing |
 
-## Building the .exe
+## Building
 
-On a Windows machine with Python 3.10 or newer on `PATH`:
+On a Windows machine with the [.NET 8 SDK](https://dot.net) or newer:
 
 ```bat
 build.bat
 ```
 
-That produces `dist\CIDCO_Setup.exe` and `dist\CIDCO_Agent.exe`. Hand
-`CIDCO_Setup.exe` to the architect — nothing else needs to be installed on their
-PC. If you'd rather not build anything, `CIDCO_Setup.bat` runs the same wizard
-from source.
+It restores, runs the tests, refuses to build if any fail, and publishes to
+`dist\`. The result is around 72 MB, which is the cost of carrying the runtime
+so that nothing has to be installed alongside it.
 
 ## 1. Installing
 
-Double-click `CIDCO_Setup.exe`. A small dialog walks through four steps.
+Double-click `CIDCO_AQI_Agent.exe`. A small dialog walks through four steps.
 
 **Step 1 — Log in as.** Architect or Administrator. Administrator is a dead end
 on purpose: CIDCO's side is the web portal, not this program, so the wizard says
@@ -72,14 +86,13 @@ in that folder, so an export that overwrites the same file each time is fine.
 > every 5 seconds · 15 seconds · 30 seconds · 1 minute · 5 minutes · 10 minutes ·
 > 15 minutes · 20 minutes · 30 minutes · 45 minutes · 1 hour · 2 hours · 3 hours
 
-**Step 4 — Install.** The choices are written to
-`%LOCALAPPDATA%\CIDCO-AQI-Agent\settings.json` and the wizard finishes.
+**Step 4 — Install.** Review the summary, tick whether you want a desktop
+shortcut and whether it should start when you sign in to Windows, then install.
 
 ## 2. Sending
 
-Open the agent (`CIDCO_Agent.exe` or `run_agent.bat`). It looks like WinSCP:
-local files on the left, what has gone to CIDCO on the right, and a transfer log
-underneath.
+The agent looks like WinSCP: local files on the left, what has gone to CIDCO on
+the right, and a transfer log underneath.
 
 Fill in the connection bar with what CIDCO emailed:
 
@@ -93,12 +106,16 @@ Fill in the connection bar with what CIDCO emailed:
 | File path | prefilled from the installer, e.g. `C:\CIDCO\exports` |
 
 Press **Connect**. Then either **Send now** for a one-off, pick a file and use
-**Send selected →**, or press **Start automatic sending** to run on the schedule
-chosen at install. Every transfer is written to the log with CIDCO's own answer,
-so a rejection tells you which field CIDCO disagreed with.
+**Send selected →** (or double-click it), or press **Start automatic sending** to
+run on the schedule chosen at install.
 
-The password is kept only for the running session. It is never written to
-`settings.json` — check `tests/test_core.py` if you want to see that asserted.
+Every transfer is written to the log **and to the agent's own database**, with
+CIDCO's own answer. A rejection names the field CIDCO disagreed with, so a
+misconfigured agent is visible rather than silent — and because the history is
+in SQLite, last night's failures are still on screen this morning.
+
+The password is kept only for the running session. It is never written to the
+database — `DatabaseLifecycleTests` reads the raw file back to prove it.
 
 ## 3. What CIDCO does with it
 
@@ -109,13 +126,13 @@ master row an officer created before any credentials were sent:
 - the **source IP** the connection actually came from,
 - the **file path** the agent declared.
 
-All three have to match. If they don't, the file is recorded as `REJECTED` with
-the reason, and not one reading is stored. The transfer still shows up in
-CIDCO's dashboard, so a misconfigured agent is visible rather than silent.
+All three have to match. If they don't, the upload itself fails — the agent says
+so — and CIDCO records it as `REJECTED` with the reason, with not one reading
+stored.
 
 Accepted files land in the data table under
 `<companyId>/<Month>/<timestamp>/<file>.csv`, e.g.
-`ABCD123/2026-09-September/2026-09-18_Friday_06-55-58/readings.csv`.
+`ABCD123/2026-09-September/2026-09-18_Friday_07-25-06/readings.csv`.
 
 ## The CSV
 
@@ -129,17 +146,76 @@ Temperature, Humidity, Other applicable environmental parameters,
 Data Source / Integration Method, Data Receipt Timestamp
 ```
 
-An existing sheet does not have to be renamed: CIDCO also accepts the everyday
-spellings (`PM 2.5`, `NO2`, `O3`, `AQI`, `Timestamp`, `Station ID`, …), and
-ignores columns it doesn't know.
+An existing sheet does not have to be renamed: CIDCO matches headers on their
+letters and digits alone, so `PM 2.5`, `NO2`, `O3` and `Station/Device ID` all
+land on the right field, and columns it doesn't know are ignored.
+
+## What's in the repo
+
+```
+src/Cidco.Core/        the logic, with no window attached — and all of the tests
+  Schedule.cs            the thirteen intervals
+  Database.cs            SQLite: settings, and the transfer history
+  Settings.cs            what the installer chose, and what the agent remembers
+  SetupFlow.cs           which wizard step comes next, and the folder check
+  CidcoSender.cs         the SFTP transfer itself
+  RemotePath.cs          /<companyId>/<folder>/<file>.csv, mirroring the server
+  ExportPicker.cs        finding the newest export
+  AqiCsv.cs              the columns CIDCO reads
+src/Cidco.Agent/       the two WinForms screens, and the install itself
+  SetupWizard.cs         the four-step dialog
+  AgentWindow.cs         the WinSCP-style transfer window
+  Installer.cs           copying itself into place
+  Program.cs             which face to show, and --uninstall
+src/Shared/            small files both the wizard and the agent use
+tests/Cidco.Core.Tests/
+sample/readings.csv
+build.bat
+```
+
+The split is deliberate: **everything that makes a decision lives in
+`Cidco.Core`**, which is plain .NET with no UI, so it can all be tested. The
+WinForms files only draw.
+
+## The agent's database
+
+SQLite, at `%LOCALAPPDATA%\CIDCO-AQI-Agent\agent.db`:
+
+| Table | What it holds |
+| --- | --- |
+| `settings` | The export folder, the schedule, the designated IP, the company id — never the password |
+| `transfers` | Every attempt: file, remote path, size, accepted or refused, CIDCO's message, when |
+
+This is the architect's own record, on their own PC. It is not CIDCO's database
+and has no connection to it.
 
 ## Tests
 
 ```bat
-python -m unittest discover -s tests -v
+dotnet test
 ```
 
-Twenty tests covering the schedule table, the saved settings (including that the
-password stays out of the file), the upload path CIDCO parses the company id
-from, and picking the newest export. The two tkinter windows need a desktop and
-so aren't tested here — every decision they make lives in the modules above.
+72 tests over the schedule table, the database (including that the password
+stays out of it), the wizard's step logic, the upload path and picking the
+newest export.
+
+Seven of them talk to a **real CIDCO server** and skip when there isn't one. To
+run those, start the server side and point the tests at it:
+
+```bat
+set CIDCO_TEST_HOST=127.0.0.1
+dotnet test
+```
+
+| Variable | Default |
+| --- | --- |
+| `CIDCO_TEST_HOST` | *(unset — the live tests skip)* |
+| `CIDCO_TEST_PORT` | `2222` |
+| `CIDCO_TEST_USER` | `cidco@example.com` |
+| `CIDCO_TEST_PASSWORD` | `123456` |
+| `CIDCO_TEST_COMPANY` | `ABCD123` |
+| `CIDCO_TEST_PATH` | `C:/CIDCO/exports` |
+
+The two WinForms screens need Windows to run, which is why the logic they drive
+was pulled out into `Cidco.Core` — the wizard's step order and folder check are
+covered by `SetupFlowTests` rather than left to a click-through.

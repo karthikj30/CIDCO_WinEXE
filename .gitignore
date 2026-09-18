@@ -1,9 +1,14 @@
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-build/
+# Build output
+bin/
+obj/
 dist/
-*.spec
-*.egg-info/
-settings.json
+*.user
+
+# The agent's own database, if one is ever created in the tree
+*.db
+*.db-wal
+*.db-shm
+
+# Editors
+.vs/
+.idea/

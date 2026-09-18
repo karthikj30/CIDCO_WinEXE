@@ -1,5 +1,0 @@
-# The agent's only runtime dependency: the SFTP client.
-paramiko>=3.4
-
-# Build-time only — turns the two entry points into Windows .exe files.
-# pip install -r requirements-build.txt
