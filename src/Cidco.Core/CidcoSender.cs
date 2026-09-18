@@ -57,6 +57,60 @@ public sealed class CidcoSender
         settings.CompanyIdOrDefault,
         settings.CsvFolder);
 
+    /// <summary>The same sender pointed at a different port.</summary>
+    public CidcoSender On(int port) =>
+        new(Host, port, Username, _password, CompanyId, CsvFolder, Timeout);
+
+    /// <summary>
+    /// Finds CIDCO's intake behind an address, and connects to it.
+    ///
+    /// The architect types an address, not a port, so when the usual one turns
+    /// out to have nothing on it — or something that is not SFTP — the other
+    /// ports CIDCO is ever on are worth trying before giving up. A wrong
+    /// password stops this immediately: that is an answer from the right
+    /// server, and hammering the neighbouring ports with it would be both
+    /// pointless and rude.
+    /// </summary>
+    public static (CidcoSender Sender, SendResult Result) FindIntake(
+        ServerAddress address,
+        string username,
+        string password,
+        string companyId,
+        string csvFolder,
+        TimeSpan? timeout = null)
+    {
+        var ports = address.PortsToTry();
+        CidcoSender? attempted = null;
+        SendResult? firstAnswer = null;
+
+        foreach (var port in ports)
+        {
+            var sender = new CidcoSender(address.Host, port, username, password, companyId, csvFolder, timeout);
+            var result = sender.CheckConnection();
+            attempted = sender;
+
+            if (result.Ok)
+            {
+                // Say so when the port was not the one that was tried first,
+                // otherwise the architect has no idea what they are connected to.
+                var message = port == ports[0] || ports.Count == 1
+                    ? result.Message
+                    : $"{result.Message} (found on port {port}).";
+                return (sender, result with { Message = message });
+            }
+
+            // Wrong credentials means this IS the server. Stop.
+            if (result.Message.Contains("refused by CIDCO", StringComparison.Ordinal))
+                return (sender, result);
+
+            firstAnswer ??= result;
+        }
+
+        // Nothing answered as SFTP. Report what the first, most likely port
+        // said rather than whatever the last long shot happened to say.
+        return (attempted!, firstAnswer!);
+    }
+
     /// <summary>
     /// Key exchanges that need Curve25519.
     ///

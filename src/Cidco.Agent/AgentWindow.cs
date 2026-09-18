@@ -25,7 +25,6 @@ internal sealed class AgentWindow : Form
     private bool _sending;
 
     private readonly TextBox _ip = new();
-    private readonly TextBox _port = new();
     private readonly TextBox _username = new();
     private readonly TextBox _password = new();
     private readonly TextBox _company = new();
@@ -82,8 +81,7 @@ internal sealed class AgentWindow : Form
 
         var fields = new[]
         {
-            ("Designated IP", _ip, 130),
-            ("Port", _port, 56),
+            ("Designated IP  (CIDCO's address)", _ip, 186),
             ("User ID", _username, 170),
             ("Password", _password, 120),
             ("Company ID", _company, 110),
@@ -220,8 +218,11 @@ internal sealed class AgentWindow : Form
 
     private void LoadSettingsIntoFields()
     {
-        _ip.Text = _settings.IpOrDefault;
-        _port.Text = _settings.PortOrDefault.ToString();
+        // The port is shown only when it is not CIDCO's usual one, so the
+        // common case is a bare address and the unusual one is still visible.
+        _ip.Text = _settings.PortOrDefault == ServerAddress.StandardPort
+            ? _settings.IpOrDefault
+            : $"{_settings.IpOrDefault}:{_settings.PortOrDefault}";
         _username.Text = _settings.UsernameOrDefault;
         _company.Text = _settings.CompanyIdOrDefault;
         _folder.Text = _settings.CsvFolder;
@@ -239,15 +240,25 @@ internal sealed class AgentWindow : Form
         _log.ScrollToCaret();
     }
 
+    /// <summary>
+    /// The sender for whatever is in the connection bar. Falls back to the
+    /// port already connected on, so a send after a successful Connect goes to
+    /// the same place rather than starting the search over.
+    /// </summary>
     private CidcoSender Sender()
     {
-        var port = int.TryParse(_port.Text.Trim(), out var parsed) ? parsed : Settings.Defaults.Port;
+        var port = ServerAddress.TryParse(_ip.Text, out var address, out _)
+            ? (address.PortWasGiven ? address.Port : _settings.PortOrDefault)
+            : _settings.PortOrDefault;
+
+        var host = address.Host.Length > 0 ? address.Host : _ip.Text.Trim();
+
         return new CidcoSender(
-            _ip.Text.Trim(),
+            host,
             port,
             _username.Text.Trim(),
             _password.Text,
-            _company.Text.Trim(),
+            _company.Text,
             _folder.Text.Trim());
     }
 
@@ -323,11 +334,22 @@ internal sealed class AgentWindow : Form
             return;
         }
 
-        _connect.Enabled = false;
-        _state.Text = "Connecting…";
+        if (!ServerAddress.TryParse(_ip.Text, out var address, out var problem))
+        {
+            Log(false, problem);
+            return;
+        }
 
-        var sender = Sender();
-        var result = await Task.Run(sender.CheckConnection);
+        _connect.Enabled = false;
+        _state.Text = "Connecting\u2026";
+
+        // Only an address was given, so let the sender look for the intake.
+        var (sender, result) = await Task.Run(() => CidcoSender.FindIntake(
+            address,
+            _username.Text.Trim(),
+            _password.Text,
+            _company.Text.Trim(),
+            _folder.Text.Trim()));
 
         _connected = result.Ok;
         _state.Text = result.Ok
@@ -346,6 +368,12 @@ internal sealed class AgentWindow : Form
             _settings.CompanyId = sender.CompanyId;
             _settings.CsvFolder = sender.CsvFolder;
             _settings.Save(_db);
+
+            // Show the port back only when it was not the usual one, so the
+            // field keeps reading as a plain address in the common case.
+            _ip.Text = sender.Port == ServerAddress.StandardPort
+                ? sender.Host
+                : $"{sender.Host}:{sender.Port}";
         }
 
         _connect.Enabled = true;

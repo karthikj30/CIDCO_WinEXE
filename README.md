@@ -104,12 +104,23 @@ Fill in the connection bar with what CIDCO emailed:
 
 | Field | Value |
 | --- | --- |
-| Designated IP | CIDCO's server address — the one in the email |
-| Port | `2222` |
+| Designated IP | CIDCO's server address — the one in the email, e.g. `13.207.123.12` |
 | User ID | `cidco@example.com` |
 | Password | `123456` |
 | Company ID | `ABCD123` |
 | File path | prefilled from the installer, e.g. `C:\CIDCO\exports` |
+
+There is no port to fill in. CIDCO's intake is on the same port everywhere, and
+if it turns out not to be, the agent looks for it: when the usual port has
+nothing on it, it tries the others CIDCO is ever on and says which one it found
+— `Connected to CIDCO at 13.207.123.12:2222 (found on port 2222).`
+
+If CIDCO ever does put an instance somewhere non-standard, type it after a
+colon and the agent takes you at your word and tries only that:
+
+```
+13.207.123.12:8010
+```
 
 Press **Connect**. Then either **Send now** for a one-off, pick a file and use
 **Send selected →** (or double-click it), or press **Start automatic sending** to
@@ -232,7 +243,7 @@ The transfer log names the cause. The three you are most likely to meet:
 
 | What the log says | What it means |
 | --- | --- |
-| **Something is listening on *host:port*, but it is not an SFTP server** | The TCP connection worked, but whatever answered never sent an SSH greeting. Almost always the wrong port — the portal's rather than the SFTP intake's. CIDCO's intake is `2222` unless they changed `SFTP_PORT`. |
+| **Something is listening on *host:port*, but it is not an SFTP server** | The TCP connection worked, but whatever answered never sent an SSH greeting. Almost always the wrong port — the portal's rather than the SFTP intake's. Leave the port off the address entirely and the agent will look for the intake itself. |
 | **Nothing is listening on *host:port*** | The port is closed. Either the SFTP service is not running on CIDCO's side, or a firewall is dropping it. |
 | **That username and password were refused by CIDCO** | You reached the SFTP server — the address and port are right — and the credentials are wrong. |
 
