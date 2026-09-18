@@ -179,3 +179,98 @@ public class RejectedLoginTests
             Assert.Contains("machine's own SSH service", message);
     }
 }
+
+/// <summary>
+/// A timeout and a refusal mean opposite things, and saying which is which is
+/// the whole point: somebody who has just confirmed their server is running
+/// will assume the agent is wrong, unless the message explains that nothing
+/// came back at all rather than something coming back to say no.
+/// </summary>
+public class TimeoutVersusRefusalTests
+{
+    /// <summary>Accepts the connection and then says nothing — a black hole.</summary>
+    private sealed class SilentHole : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly List<TcpClient> _held = new();
+        private readonly CancellationTokenSource _stop = new();
+
+        public int Port { get; }
+
+        public SilentHole()
+        {
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            _ = Task.Run(async () =>
+            {
+                while (!_stop.IsCancellationRequested)
+                {
+                    try { _held.Add(await _listener.AcceptTcpClientAsync(_stop.Token)); }
+                    catch (Exception) { return; }
+                }
+            });
+        }
+
+        public void Dispose()
+        {
+            _stop.Cancel();
+            foreach (var held in _held) held.Dispose();
+            _listener.Stop();
+            _stop.Dispose();
+        }
+    }
+
+    private static int ClosedPort()
+    {
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        return port;
+    }
+
+    private static string Message(int port) =>
+        new CidcoSender("127.0.0.1", port, "u", "p", "ABCD123", "/tmp", TimeSpan.FromSeconds(5))
+            .CheckConnection().Message;
+
+    [Fact]
+    public void A_timeout_says_nothing_came_back_rather_than_the_service_being_down()
+    {
+        using var hole = new SilentHole();
+        var message = Message(hole.Port);
+
+        Assert.Contains("timed out rather than being refused", message);
+        Assert.Contains("not that the service is down", message);
+        Assert.DoesNotContain("Nothing is listening", message);
+    }
+
+    [Fact]
+    public void A_timeout_names_both_ends_that_could_be_dropping_the_traffic()
+    {
+        using var hole = new SilentHole();
+        var message = Message(hole.Port);
+
+        Assert.Contains("security group", message);      // CIDCO's end
+        Assert.Contains("outbound firewall", message);   // and this one
+    }
+
+    [Fact]
+    public void A_refusal_says_the_opposite_thing()
+    {
+        var message = Message(ClosedPort());
+
+        Assert.Contains("Nothing is listening", message);
+        Assert.DoesNotContain("timed out", message);
+        Assert.DoesNotContain("security group", message);
+    }
+
+    [Fact]
+    public void Both_are_worth_retrying_because_both_can_come_right()
+    {
+        using var hole = new SilentHole();
+        var sender = new CidcoSender("127.0.0.1", hole.Port, "u", "p", "ABCD123", "/tmp",
+            TimeSpan.FromSeconds(5));
+        Assert.True(sender.CheckConnection().WorthRetrying);
+    }
+}

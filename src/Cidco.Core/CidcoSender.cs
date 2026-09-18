@@ -338,6 +338,22 @@ public sealed class CidcoSender
     }
 
     /// <summary>
+    /// Nothing came back at all.
+    ///
+    /// Worth spelling out, because a timeout and a refusal get confused and
+    /// they mean opposite things. A refusal means the packets arrived and
+    /// nothing was listening — the service is down. A timeout means they never
+    /// arrived, so the service could be running perfectly and still be
+    /// unreachable. Somebody who has just checked that their server is up will
+    /// otherwise assume the agent is wrong.
+    /// </summary>
+    private static string TimedOut(string where) =>
+        $"{where} did not answer at all \u2014 the connection timed out rather than being refused, " +
+        "which means nothing came back, not that the service is down. Something is dropping the " +
+        "traffic on the way: on AWS that is normally an inbound rule missing from the security group " +
+        "for this port, and it can equally be this PC's own outbound firewall.";
+
+    /// <summary>
     /// A rejected login, saying which server did the rejecting.
     ///
     /// The agent finds the port itself, so "refused" on its own leaves the
@@ -399,7 +415,7 @@ public sealed class CidcoSender
         }
 
         if (error is SshOperationTimeoutException)
-            return $"{where} did not answer in time. A firewall between this PC and CIDCO is the usual cause.";
+            return TimedOut(where);
 
         return $"Could not reach CIDCO at {where} — {Explain(error)}";
     }
