@@ -168,7 +168,11 @@ public class LivePrivateKeyTests
         var result = Sender(Key).Send(Export());
 
         Assert.True(result.Ok, result.Message);
-        Assert.Equal($"{Dir}/readings.csv", result.Remote);
+
+        // Filed under the dated tree the agent builds, beneath the folder
+        // that was named.
+        Assert.StartsWith($"{Dir}/ABCD123/", result.Remote);
+        Assert.EndsWith(".csv", result.Remote);
     }
 
     [SkippableFact]
@@ -202,5 +206,102 @@ public class LivePrivateKeyTests
 
         Assert.True(connected.Ok, connected.Message);
         Assert.True(transport.Send(Export()).Ok);
+    }
+}
+
+/// <summary>
+/// Building the tree on a server that has none of it.
+///
+/// The folder an architect names will very often not exist yet, and SFTP has
+/// no "make the parents too" — so the agent creates each level in turn. This
+/// is what was failing with "No such file. Path: '/home/ubuntu/uploads/…'".
+/// </summary>
+public class LiveDatedTreeTests
+{
+    private static string Host => Environment.GetEnvironmentVariable("CIDCO_TEST_HOST") ?? "";
+    private static int? Port =>
+        int.TryParse(Environment.GetEnvironmentVariable("CIDCO_TEST_PLAIN_PORT"), out var p) ? p : null;
+    private static string User => Environment.GetEnvironmentVariable("CIDCO_TEST_PLAIN_USER") ?? "";
+    private static string Key => Environment.GetEnvironmentVariable("CIDCO_TEST_KEY") ?? "";
+
+    /// <summary>A base folder under the test account that is created fresh each run.</summary>
+    private static string Base => Environment.GetEnvironmentVariable("CIDCO_TEST_TREE_BASE") ?? "";
+
+    private static bool Available =>
+        !string.IsNullOrWhiteSpace(Host) && Port is not null &&
+        !string.IsNullOrWhiteSpace(User) && !string.IsNullOrWhiteSpace(Key) &&
+        !string.IsNullOrWhiteSpace(Base);
+
+    private static FileInfo Export()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "cidco-tree-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "readings.csv");
+        File.WriteAllText(path, AqiCsv.HeaderRow() + "\nCIDCO-KHR-012\n");
+        return new FileInfo(path);
+    }
+
+    private static ICidcoTransport Connect(string baseDirectory)
+    {
+        Assert.True(ServerAddress.TryParse($"{Host}:{Port}{baseDirectory}", out var address, out var problem), problem);
+        var (transport, connected) = CidcoTransports.Connect(
+            address, User, "", "ABCD123", Path.GetTempPath(),
+            TimeSpan.FromSeconds(12), privateKeyPath: Key);
+        Assert.True(connected.Ok, connected.Message);
+        return transport;
+    }
+
+    [SkippableFact]
+    public void A_base_folder_that_does_not_exist_is_created()
+    {
+        Skip.IfNot(Available, "no key-authenticated server configured");
+
+        // Somewhere that has certainly never existed.
+        var fresh = $"{Base}/made-up-{Guid.NewGuid():N}";
+        var result = Connect(fresh).Send(Export());
+
+        Assert.True(result.Ok, result.Message);
+        Assert.StartsWith(fresh + "/ABCD123/", result.Remote);
+    }
+
+    [SkippableFact]
+    public void The_file_lands_in_company_month_date()
+    {
+        Skip.IfNot(Available, "no key-authenticated server configured");
+        var now = DateTimeOffset.Now;
+        var result = Connect($"{Base}/layout-{Guid.NewGuid():N}").Send(Export());
+
+        Assert.True(result.Ok, result.Message);
+        Assert.Contains("/ABCD123/", result.Remote);
+        Assert.Contains($"/{now:yyyy-MM}-{now:MMMM}/", result.Remote);
+        Assert.Contains($"/{now:yyyy-MM-dd}/", result.Remote);
+        Assert.EndsWith(".csv", result.Remote);
+    }
+
+    [SkippableFact]
+    public void Two_sends_in_a_row_both_survive()
+    {
+        Skip.IfNot(Available, "no key-authenticated server configured");
+        var transport = Connect($"{Base}/twice-{Guid.NewGuid():N}");
+
+        var first = transport.Send(Export());
+        Thread.Sleep(1100);   // the stamp has second resolution
+        var second = transport.Send(Export());
+
+        Assert.True(first.Ok, first.Message);
+        Assert.True(second.Ok, second.Message);
+        Assert.NotEqual(first.Remote, second.Remote);
+    }
+
+    [SkippableFact]
+    public void Sending_into_a_tree_that_already_exists_is_fine_too()
+    {
+        Skip.IfNot(Available, "no key-authenticated server configured");
+        var shared = $"{Base}/again-{Guid.NewGuid():N}";
+
+        Assert.True(Connect(shared).Send(Export()).Ok);
+        Thread.Sleep(1100);
+        // Second time round every folder is already there.
+        Assert.True(Connect(shared).Send(Export()).Ok);
     }
 }

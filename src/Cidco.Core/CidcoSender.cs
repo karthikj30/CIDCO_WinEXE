@@ -374,9 +374,12 @@ public sealed class CidcoSender : ICidcoTransport
             return SendResult.Failed($"{source.Name} is not a .csv or .xlsx file", TransferOutcome.NothingToSend) with { FileName = source.Name };
 
         // CIDCO's intake reads the company and the source folder out of the
-        // path; an ordinary server just wants a folder to write into.
+        // path and files the reading itself. On an ordinary server there is
+        // nothing to do that, so the agent lays out the same shape by hand:
+        // <base>/<companyId>/<year-month>/<date>/<file>.
+        var sentAt = DateTimeOffset.Now;
         var target = IsPlainSftp
-            ? RemotePath.Join(RemoteDirectory, source.Name)
+            ? RemotePath.DatedTree(RemoteDirectory, CompanyId, source.Name, sentAt)
             : RemotePath.For(CompanyId, CsvFolder, source.Name);
 
         // Getting to CIDCO and being turned away by CIDCO are different
@@ -403,8 +406,13 @@ public sealed class CidcoSender : ICidcoTransport
         try
         {
             using (client)
-            using (var stream = source.OpenRead())
             {
+                // An ordinary server has no idea what tree we want, so make it.
+                // CIDCO's intake builds its own, and a client has no business
+                // creating folders there.
+                if (IsPlainSftp) EnsureFolders(client, target);
+
+                using var stream = source.OpenRead();
                 client.UploadFile(stream, target);
             }
         }
@@ -425,7 +433,7 @@ public sealed class CidcoSender : ICidcoTransport
             // Not a compliance submission, and it must not read like one: no
             // company was checked, no address, no path, and nothing was filed
             // against a registration. Only the file transfer itself is proven.
-            ? $"{source.Name} uploaded to {Host}:{Port}{RemoteDirectory} \u2014 plain SFTP, " +
+            ? $"{source.Name} uploaded to {Host}:{Port}{target} \u2014 plain SFTP, " +
               "so CIDCO has not validated or stored anything."
             : $"{source.Name} sent to CIDCO";
 
@@ -435,6 +443,35 @@ public sealed class CidcoSender : ICidcoTransport
             Remote = target,
             SizeBytes = source.Length,
         };
+    }
+
+    /// <summary>
+    /// Creates every folder in the path that is not there yet.
+    ///
+    /// SFTP has no "make the parents too", so each level is created in turn and
+    /// an "already exists" is the expected answer for most of them.
+    /// </summary>
+    private static void EnsureFolders(SftpClient client, string remoteFilePath)
+    {
+        foreach (var folder in RemotePath.FoldersOf(remoteFilePath))
+        {
+            try
+            {
+                if (!client.Exists(folder)) client.CreateDirectory(folder);
+            }
+            catch (SftpPathNotFoundException)
+            {
+                // A parent that a moment ago was not there. The next round of
+                // the loop covers it; if it genuinely cannot be made, the
+                // upload below fails and says so.
+            }
+            catch (SshException)
+            {
+                // Most often "already exists" from a server that answers Exists
+                // with a permissions error. Creating it again is not the fix,
+                // and the upload will report anything that really is wrong.
+            }
+        }
     }
 
     /// <summary>Sends, and writes the outcome to the agent's own history.</summary>

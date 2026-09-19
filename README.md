@@ -174,6 +174,30 @@ box is then the key's passphrase if it has one — leave it empty if it does not
 Only the path is remembered; the key stays where it is and the passphrase is
 never written down.
 
+### Where the file lands on your own server
+
+Name a base folder in the address and the agent files the reading beneath it,
+in the same shape CIDCO's own data table uses:
+
+```
+13.207.123.12:22/home/ubuntu/SFTP
+
+  /home/ubuntu/SFTP/
+    ABCD123/                              the company id
+      2026-09-September/                  the month it was sent
+        2026-09-19/                       the day
+          readings_2026-09-19_13-28-49.csv
+```
+
+**Any folder that is not there is created**, the whole way down — SFTP has no
+"make the parents too", so the agent creates each level in turn. A base folder
+that has never existed is fine.
+
+The time is in the file name rather than another folder level. The agent sends
+on a schedule, so a plain `readings.csv` in a per-day folder would mean every
+send quietly destroying the one before it; losing compliance data silently is
+worse than a longer name.
+
 ### Testing against your own server
 
 Name a folder in the address and the agent behaves like any other SFTP client:
