@@ -77,8 +77,11 @@ so and closes. Everyone installing this picks **Architect**.
 
 **Step 2 — CSV folder.** The folder the AQI export is written to, e.g.
 `C:\CIDCO\exports`. Browse or type it; the wizard checks it exists before
-letting you continue. The agent always sends the **newest** `.csv` (or `.xlsx`)
-in that folder, so an export that overwrites the same file each time is fine.
+letting you continue. The agent always sends the **newest** `.csv` in that
+folder, so an export that overwrites the same file each time is fine. The local
+file can be called anything — `readings.csv`, `Sept export (2).csv` — because
+the copy sent to CIDCO is renamed (see *Sending* below). Spreadsheets are not
+sent: every upload goes as a `.csv`, so an `.xlsx` would arrive unreadable.
 
 **Step 3 — Schedule.** How often to send:
 
@@ -120,6 +123,34 @@ colon and the agent takes you at your word and tries only that:
 Press **Connect**. Then either **Send now** for a one-off, pick a file and use
 **Send selected →** (or double-click it), or press **Start automatic sending** to
 run on the schedule chosen at install.
+
+### What gets sent, and under what name
+
+The local export keeps its own name. The copy that goes over the wire is always
+renamed:
+
+```
+<Company ID>_<yyyy-MM-dd>_<HH-mm-ss>_AQI.csv
+e.g.  ABCD123_2026-09-19_13-28-49_AQI.csv
+```
+
+Company id, then the month, date and time of the send, then `_AQI.csv`. CIDCO's
+poll handlers read the company and the timestamp out of that name alone, which
+is why it is fixed. Two sends a second apart cannot overwrite each other.
+
+### The agent does not create folders
+
+Before uploading, the agent checks the destination folder **already exists**. If
+it does not, the transfer is refused and the log says so:
+
+```
+Path does not exist: /home/ubuntu/uploads/nope. The agent will not create
+folders on the server.
+```
+
+This is deliberate. The architect's account needs permission to write one file
+and nothing else — no directory creation, no tree to walk. On CIDCO's side the
+folder tree is built by poll1 after the file arrives, not by the sender.
 
 Every transfer is written to the log **and to the agent's own database**, with
 CIDCO's own answer. A rejection names the field CIDCO disagreed with, so a

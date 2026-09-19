@@ -59,6 +59,17 @@ public class LiveServerTests
         Assert.Contains("refused that username and password", result.Message);
     }
 
+    /// <summary>
+    /// The name every upload now carries. The local export keeps its own name;
+    /// only the copy on CIDCO's side is renamed.
+    /// </summary>
+    private static void AssertAqiName(string name, string company = "ABCD123")
+    {
+        Assert.StartsWith(company + "_", name);
+        Assert.EndsWith("_AQI.csv", name);
+        Assert.Matches(@"^.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_AQI\.csv$", name);
+    }
+
     [SkippableFact]
     public void A_registered_company_gets_its_CSV_through()
     {
@@ -68,8 +79,9 @@ public class LiveServerTests
         var result = Sender().Send(file);
 
         Assert.True(result.Ok, result.Message);
-        Assert.Equal("readings.csv", result.FileName);
-        Assert.Equal($"/{Company}/{RegisteredPath.TrimStart('/')}/readings.csv", result.Remote);
+        // readings.csv on disk, companyId_timestamp_AQI.csv on the wire.
+        AssertAqiName(result.FileName, Company);
+        Assert.Equal($"/{Company}/{RegisteredPath.TrimStart('/')}/{result.FileName}", result.Remote);
         Assert.True(result.SizeBytes > 0);
     }
 
@@ -99,7 +111,7 @@ public class LiveServerTests
         Assert.True(result.Ok, result.Message);
         var row = Assert.Single(db.RecentTransfers());
         Assert.True(row.Accepted);
-        Assert.Equal("readings.csv", row.FileName);
+        AssertAqiName(row.FileName, Company);
         Assert.Equal(Company, row.CompanyId);
         Assert.Equal(result.Remote, row.RemotePath);
         Assert.Equal((1, 0), db.TransferTally());
@@ -124,26 +136,28 @@ public class LiveServerTests
     }
 
     [SkippableFact]
-    public void A_file_path_CIDCO_does_not_recognise_is_refused_on_the_wire()
+    public void A_file_path_CIDCO_has_no_record_of_is_still_taken()
     {
         Skip.IfNot(Available, "no CIDCO server configured");
         var (_, file) = Export();
 
-        // The architect never sees CIDCO's dashboard, so a mismatch has to come
-        // back as a failure rather than a quiet success.
+        // The path the export came from used to have to match the company's
+        // registration, and a mismatch was refused on the wire. It no longer
+        // is: the intake queues the file and poll1 files it under the company
+        // and timestamp in its name, so a company that never registered a path
+        // — or registered the wrong one — still gets its data in.
         var result = Sender(folder: "/not/the/registered/path").Send(file);
 
-        Assert.False(result.Ok);
-        Assert.Contains("refused the transfer", result.Message);
+        Assert.True(result.Ok, result.Message);
 
-        // A refusal still has to say which file, or the architect cannot tell
-        // which export CIDCO turned away.
-        Assert.Equal("readings.csv", result.FileName);
+        // Accepted or refused, the result has to say which file, or the
+        // architect cannot tell which export it is reading about.
+        AssertAqiName(result.FileName, Company);
         Assert.NotEqual("", result.Remote);
     }
 
     [SkippableFact]
-    public void A_refused_transfer_is_named_in_the_local_history()
+    public void A_transfer_is_named_in_the_local_history()
     {
         Skip.IfNot(Available, "no CIDCO server configured");
         var (_, file) = Export();
@@ -154,8 +168,7 @@ public class LiveServerTests
         Sender(folder: "/not/the/registered/path").SendAndRecord(db, file);
 
         var row = Assert.Single(db.RecentTransfers());
-        Assert.False(row.Accepted);
-        Assert.Equal("readings.csv", row.FileName);   // not an em dash
+        AssertAqiName(row.FileName, Company);   // not an em dash
     }
 
     [SkippableFact]
@@ -168,10 +181,16 @@ public class LiveServerTests
         File.WriteAllText(stale, AqiCsv.HeaderRow() + "\n");
         File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-2));
 
-        var result = new CidcoSender(Host, Port, User, Password, Company, RegisteredPath).Send(
-            ExportPicker.Newest(folder));
+        var newest = ExportPicker.Newest(folder)!;
+        var result = new CidcoSender(Host, Port, User, Password, Company, RegisteredPath).Send(newest);
 
         Assert.True(result.Ok, result.Message);
-        Assert.Equal("readings.csv", result.FileName);
+        AssertAqiName(result.FileName, Company);
+
+        // Both exports are renamed on the wire, so the name no longer says
+        // which one went — the size does. The stale file is the header alone.
+        Assert.Equal("readings.csv", newest.Name);
+        Assert.Equal(newest.Length, result.SizeBytes);
+        Assert.NotEqual(new FileInfo(stale).Length, result.SizeBytes);
     }
 }

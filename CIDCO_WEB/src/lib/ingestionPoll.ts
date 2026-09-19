@@ -11,6 +11,8 @@ import {
   safeFolder,
   sharedLoginHandshake,
   timestampFolderFor,
+  validateColumns,
+  validateRows,
 } from '@/lib/sftp';
 
 /**
@@ -109,10 +111,24 @@ export function pollTreeLocation(companyId: string, fileName: string, parsed: Pa
   };
 }
 
+/**
+ * The file status always lists all ten steps.
+ *
+ * A run stops at the first failure, so only the steps up to it have a result.
+ * Reporting just those would leave the officer reading the dashboard unable to
+ * tell a step that passed from one that never ran — and the whole point of the
+ * status is to say which step is missing. So the steps after the failure are
+ * spelled out as NOT REACHED rather than left off.
+ */
 function formatFileStatus(steps: IngestionStepResult[]): string {
-  return steps
-    .map((s) => `${s.step} — ${s.ok ? 'OK' : `FAILED: ${s.detail}`}`)
-    .join('\n');
+  const done = new Map(steps.map((s) => [s.step, s]));
+  const failedAt = steps.find((s) => !s.ok)?.step;
+
+  return INGESTION_STEPS.map((step) => {
+    const result = done.get(step);
+    if (!result) return `${step} — NOT REACHED${failedAt ? ` (stopped at ${failedAt})` : ''}`;
+    return `${step} — ${result.ok ? 'OK' : `FAILED: ${result.detail}`}`;
+  }).join('\n');
 }
 
 function allCorrect(steps: IngestionStepResult[]): boolean {
@@ -314,10 +330,14 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
 
   for (const row of pending) {
     try {
-      await prisma.dataFile.update({
-        where: { id: row.id },
+      // Claim the row, and only carry on if this run is the one that got it.
+      // A plain update would let two poll runs both take a file that was
+      // FILED when they each read it, and ingest the same delivery twice.
+      const claimed = await prisma.dataFile.updateMany({
+        where: { id: row.id, pollStatus: 'FILED' },
         data: { pollStatus: 'INGESTING' },
       });
+      if (claimed.count === 0) continue;
 
       const absolute = path.join(dataRoot(), row.relativePath);
       const steps: IngestionStepResult[] = [];
@@ -388,28 +408,78 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
 
       if (!sheet.columns.length) {
         mark(INGESTION_STEPS[5], false, 'no header row');
-        mark(INGESTION_STEPS[6], false, 'skipped');
         await failRow(row.id, steps);
         continue;
       }
-      mark(INGESTION_STEPS[5], true, `${sheet.columns.length} columns`);
 
+      // A header row of "foo,bar" is a header row. Only checking it against
+      // the columns CIDCO published tells the officer the sheet is the wrong
+      // sheet, rather than reporting one validation error per row.
+      const columnCheck = validateColumns(sheet.columns);
+      if (!columnCheck.ok) {
+        mark(
+          INGESTION_STEPS[5],
+          false,
+          `missing required column(s): ${columnCheck.missing.join(', ')}` +
+            (columnCheck.unrecognised.length
+              ? `; unrecognised header(s): ${columnCheck.unrecognised.join(', ')}`
+              : ''),
+        );
+        await failRow(row.id, steps);
+        continue;
+      }
+      mark(
+        INGESTION_STEPS[5],
+        true,
+        `${columnCheck.recognisedCount}/${sheet.columns.length} columns recognised` +
+          (columnCheck.unrecognised.length
+            ? `, ignoring ${columnCheck.unrecognised.join(', ')}`
+            : ''),
+      );
+
+      // 7. Data
       if (!sheet.rows.length) {
         mark(INGESTION_STEPS[6], false, 'no data rows');
         await failRow(row.id, steps);
         continue;
       }
-      mark(INGESTION_STEPS[6], true, `${sheet.rows.length} rows`);
+
+      const rowCheck = validateRows(sheet.rows);
+      if (!rowCheck.ok) {
+        mark(
+          INGESTION_STEPS[6],
+          false,
+          `no valid row in ${rowCheck.rowCount}: ` +
+            rowCheck.errors.slice(0, 5).map((e) => `row ${e.row}: ${e.error}`).join('; '),
+        );
+        await failRow(row.id, steps, { rowCount: rowCheck.rowCount, importedCount: 0 });
+        continue;
+      }
+      mark(
+        INGESTION_STEPS[6],
+        true,
+        `${rowCheck.validCount}/${rowCheck.rowCount} rows valid` +
+          (rowCheck.errors.length
+            ? `, ${rowCheck.errors.length} rejected (${rowCheck.errors
+                .slice(0, 3)
+                .map((e) => `row ${e.row}: ${e.error}`)
+                .join('; ')})`
+            : ''),
+      );
 
       // 8. Duplicate — same company + timestamp + relative path already archived
-      const duplicate = await prisma.dataFile.findFirst({
-        where: {
-          companyId: row.companyId,
-          timestamp: row.timestamp,
-          pollStatus: 'ARCHIVED',
-          id: { not: row.id },
-        },
-      });
+      // Only a real timestamp identifies a file. Matching on a null one would
+      // make every unstamped file a duplicate of the last unstamped file.
+      const duplicate = row.timestamp
+        ? await prisma.dataFile.findFirst({
+            where: {
+              companyId: row.companyId,
+              timestamp: row.timestamp,
+              pollStatus: 'ARCHIVED',
+              id: { not: row.id },
+            },
+          })
+        : null;
       if (duplicate) {
         mark(INGESTION_STEPS[7], false, `duplicate of ${duplicate.relativePath}`);
         await failRow(row.id, steps);
@@ -432,7 +502,16 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
       });
 
       if (outcome.importedCount === 0) {
-        mark(INGESTION_STEPS[8], false, outcome.errors.map((e) => e.error).join('; ') || 'nothing imported');
+        // Step 7 said the rows were valid, so nothing stored means the store
+        // itself failed — worth saying plainly, because it is a different
+        // problem from bad data and needs a different person to look at it.
+        mark(
+          INGESTION_STEPS[8],
+          false,
+          `stored 0 of ${outcome.rowCount} valid rows: ` +
+            (outcome.errors.map((e) => `row ${e.row}: ${e.error}`).slice(0, 5).join('; ') ||
+              'nothing imported'),
+        );
         await failRow(row.id, steps, {
           rowCount: outcome.rowCount,
           importedCount: 0,
@@ -440,11 +519,26 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
         });
         continue;
       }
+
+      // The step is "store audit information", so it writes the audit trail as
+      // well as the readings: who delivered what, from where, into which file.
+      await prisma.auditLog.create({
+        data: {
+          userId: handshake.architectId,
+          action: 'SFTP_INGEST',
+          detail:
+            `${row.companyId} ${row.fileName}: stored ${outcome.importedCount}/${outcome.rowCount} readings ` +
+            `from ${row.relativePath}`,
+          ip: row.sourceIp,
+        },
+      }).catch(() => undefined);
+
       mark(
         INGESTION_STEPS[8],
         true,
         `stored ${outcome.importedCount}/${outcome.rowCount}` +
-          (outcome.failedCount ? `, ${outcome.failedCount} row errors` : ''),
+          (outcome.failedCount ? `, ${outcome.failedCount} row errors` : '') +
+          ', audit written',
       );
 
       // 10. Move to archive

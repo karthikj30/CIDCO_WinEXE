@@ -28,9 +28,20 @@ public static class AqiCsv
         "Data Receipt Timestamp",
     };
 
-    /// <summary>The file types CIDCO accepts. CSV is the everyday one.</summary>
-    public static readonly IReadOnlyList<string> AcceptedSuffixes = new[] { ".csv", ".xlsx" };
+    /// <summary>
+    /// The file types the agent sends. CSV only, and deliberately so: every
+    /// upload is renamed to companyId_timestamp_AQI.csv, so sending a
+    /// spreadsheet would hand CIDCO a binary .xlsx wearing a .csv name. It
+    /// would pass CIDCO's file-type check and fail its column check, which is
+    /// the worst of both — so the agent refuses it here, where the message can
+    /// still name the actual file.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AcceptedSuffixes = new[] { ".csv" };
 
+    /// <summary>
+    /// Any name is fine as long as it is a .csv: readings.csv, aqi.daily.csv,
+    /// Sept Export (2).csv. The name is discarded on upload anyway.
+    /// </summary>
     public static bool IsAccepted(string fileName) =>
         AcceptedSuffixes.Any(suffix => fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
 

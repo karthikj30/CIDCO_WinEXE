@@ -102,7 +102,7 @@ public sealed class PortalSender : ICidcoTransport
             return SendResult.Failed($"{source.Name} is no longer there", TransferOutcome.NothingToSend)
                 with { FileName = source.Name };
         if (!AqiCsv.IsAccepted(source.Name))
-            return SendResult.Failed($"{source.Name} is not a .csv or .xlsx file", TransferOutcome.NothingToSend)
+            return SendResult.Failed($"{source.Name} is not a .csv file", TransferOutcome.NothingToSend)
                 with { FileName = source.Name };
 
         // Same rename rule as SFTP: companyId_timestamp_AQI.csv regardless of

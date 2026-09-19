@@ -53,10 +53,13 @@ public class ExportPickerTests : IDisposable
     }
 
     [Fact]
-    public void An_xlsx_export_counts_too()
+    public void A_spreadsheet_is_not_an_export()
     {
+        // Every upload is renamed to .csv, so an .xlsx would arrive as a
+        // binary file wearing a .csv name: accepted by type, rejected by
+        // columns. Better never to pick it up.
         Write("readings.xlsx");
-        Assert.Equal("readings.xlsx", ExportPicker.Newest(_folder)!.Name);
+        Assert.Null(ExportPicker.Newest(_folder));
     }
 
     [Fact]
@@ -100,9 +103,9 @@ public class AqiCsvTests
     [Theory]
     [InlineData("readings.csv", true)]
     [InlineData("READINGS.CSV", true)]
-    [InlineData("readings.xlsx", true)]
+    [InlineData("readings.xlsx", false)]
     [InlineData("notes.txt", false)]
     [InlineData("readings.csv.bak", false)]
-    public void Only_a_csv_or_xlsx_is_sendable(string name, bool accepted) =>
+    public void Only_a_csv_is_sendable(string name, bool accepted) =>
         Assert.Equal(accepted, AqiCsv.IsAccepted(name));
 }

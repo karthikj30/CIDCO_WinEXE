@@ -26,12 +26,20 @@ async function tick() {
   }
 }
 
+/**
+ * One tick at a time.
+ *
+ * setInterval would start a second tick while the first is still reading a
+ * large file, and two runs racing over the same inbox is exactly the way to
+ * ingest one delivery twice. Scheduling the next tick only once the current
+ * one has finished costs nothing and makes that impossible.
+ */
 async function main() {
   console.log(`[poll] AQI SFTP Ingestion Service — every ${INTERVAL}ms`);
-  await tick();
-  setInterval(() => {
-    void tick();
-  }, INTERVAL);
+  for (;;) {
+    await tick();
+    await new Promise((resolve) => setTimeout(resolve, INTERVAL));
+  }
 }
 
 void main();

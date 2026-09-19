@@ -1,7 +1,11 @@
 # --- architect_WINexe ---
-architect_WINexe/bin/
-architect_WINexe/obj/
-architect_WINexe/dist/
+# Build output lives beside each project, not only at the root.
+architect_WINexe/**/bin/
+architect_WINexe/**/obj/
+# Excluding the folder itself would stop git ever looking inside it, and the
+# negation below would never be read. Excluding its contents leaves the one
+# file we do ship — the published agent — reachable.
+architect_WINexe/dist/*
 !architect_WINexe/dist/CIDCO_AQI_Agent.exe
 *.user
 *.ppk

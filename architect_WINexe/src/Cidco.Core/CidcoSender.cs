@@ -371,7 +371,9 @@ public sealed class CidcoSender : ICidcoTransport
         if (!source.Exists)
             return SendResult.Failed($"{source.Name} is no longer there", TransferOutcome.NothingToSend) with { FileName = source.Name };
         if (!AqiCsv.IsAccepted(source.Name))
-            return SendResult.Failed($"{source.Name} is not a .csv or .xlsx file", TransferOutcome.NothingToSend) with { FileName = source.Name };
+            return SendResult.Failed(
+                $"{source.Name} is not a .csv file \u2014 every upload is sent as a .csv, so a spreadsheet would arrive unreadable",
+                TransferOutcome.NothingToSend) with { FileName = source.Name };
 
         // Any local name is fine; the remote name is always
         // companyId_timestamp_AQI.csv so CIDCO can parse it without the export

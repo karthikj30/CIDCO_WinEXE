@@ -229,6 +229,33 @@ storage/cidco-data/
 Officers browse that tree under **Data** in `/cidco/sftp`, with the company's master row and each
 file's `fileStatus`. Trigger polls manually with `POST /api/admin/sftp/poll`.
 
+#### Reading `fileStatus`
+
+It always lists **all ten steps**, whatever happened. A run stops at the first
+failure, so the steps after it are spelled out as `NOT REACHED` rather than left
+off — otherwise a step that passed and a step that never ran would look the
+same, and saying which step is missing is the whole point of the field. A file
+that cleared all ten opens with `CORRECT`.
+
+```
+1. Detect new file — OK
+2. Check file completeness — OK
+3. Validate file type — OK
+4. Validate filename — OK
+5. Validate Project/Site — OK
+6. Validate columns — FAILED: missing required column(s): measuredAt, aqiValue;
+   unrecognised header(s): foo, bar
+7. Validate data — NOT REACHED (stopped at 6. Validate columns)
+8. Check duplicate — NOT REACHED (stopped at 6. Validate columns)
+…
+```
+
+Step 6 compares the header row against the columns CIDCO published, so a sheet
+that is simply the wrong sheet is caught once, by name, instead of as one
+validation error per row. Step 7 then checks every row against the same schema
+the store uses, but writes nothing — so "is this data valid" (step 7) stays a
+separate question from "did it go in" (step 9).
+
 The columns CIDCO reads:
 
 ```

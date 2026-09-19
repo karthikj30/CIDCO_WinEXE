@@ -116,7 +116,7 @@ internal sealed class AgentWindow : Form
 
         connect.Controls.Add(new Label
         {
-            Text = "File path (set during setup — CIDCO checks it on every transfer)",
+            Text = "File path (set during setup — the newest .csv here is the one that goes)",
             Font = Theme.Small,
             ForeColor = Theme.Muted,
             Location = new Point(14, 68),
@@ -167,6 +167,18 @@ internal sealed class AgentWindow : Form
         _scheduleText.AutoSize = true;
         _scheduleText.Location = new Point(560, 7);
         status.Controls.AddRange(new Control[] { _state, _scheduleText });
+
+        // Keep the schedule text against the right edge, and stop the state
+        // text before it. Both are AutoSize, and the state text grows with
+        // what it has to say — "Connected · … (plain SFTP — not CIDCO) — last
+        // transfer refused" ran straight through the schedule text and left
+        // the two overprinted and unreadable.
+        status.Layout += (_, _) =>
+        {
+            var right = status.ClientSize.Width - status.Padding.Right;
+            _scheduleText.Left = Math.Max(12, right - _scheduleText.Width);
+            _state.MaximumSize = new Size(Math.Max(120, _scheduleText.Left - 24), 0);
+        };
 
         // --- the two panes -------------------------------------------------
         // The splitter is positioned in OnLoad, not here: SplitterDistance is

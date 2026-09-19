@@ -414,16 +414,7 @@ export async function importRows(params: {
     // +2: sheet rows are 1-based and row 1 is the header.
     const sheetRow = i + 2;
     try {
-      const raw = normaliseReadingFields(rows[i]);
-      if (!raw.siteName) raw.siteName = raw.projectSiteId || raw.monitoringStationId || 'Uploaded station';
-      if (!raw.location) raw.location = raw.projectSiteId ? String(raw.projectSiteId) : 'N/A';
-      if (!raw.integrationMethod) raw.integrationMethod = 'SFTP Excel upload';
-      // A free-text "other parameters" cell is kept as a labelled note.
-      if (typeof raw.otherParams === 'string' && raw.otherParams.trim()) {
-        raw.otherParams = { note: raw.otherParams.trim() };
-      }
-
-      const input = reportSchema.parse(raw);
+      const input = reportSchema.parse(prepareRow(rows[i]));
       await createReport({ userId: architectId, source: 'SFTP', input, companyRecordId });
       importedCount++;
     } catch (error) {
@@ -432,6 +423,91 @@ export async function importRows(params: {
   }
 
   return { rowCount: rows.length, importedCount, failedCount: errors.length, errors };
+}
+
+/**
+ * The columns a reading cannot be stored without. Everything else on the
+ * CIDCO sheet is optional — a station that reports no ozone still reports an
+ * AQI value, and a reading with no time is not a reading.
+ */
+export const REQUIRED_COLUMN_KEYS = ['measuredAt', 'aqiValue'] as const;
+
+export type ColumnCheck = {
+  ok: boolean;
+  /** Required AQI columns the header row does not carry. */
+  missing: string[];
+  /** Headers CIDCO does not recognise, kept for the officer to look at. */
+  unrecognised: string[];
+  /** How many of CIDCO's published columns were matched. */
+  recognisedCount: number;
+};
+
+/**
+ * Step 6 of the ingestion service, and the reason it exists.
+ *
+ * A header row of "foo,bar" parses perfectly well — it is a header row, it is
+ * non-empty, and every row under it has values. Only comparing it against the
+ * columns CIDCO published catches it, and catching it here rather than at the
+ * store step is what lets the file status say "the columns are wrong" instead
+ * of listing a validation error for every row in the file.
+ */
+export function validateColumns(columns: SheetColumn[]): ColumnCheck {
+  const known = new Set(SHEET_COLUMNS.map((c) => c.key));
+  const present = new Set(columns.map((c) => c.key));
+
+  const missing = REQUIRED_COLUMN_KEYS.filter((key) => !present.has(key));
+  const unrecognised = columns.filter((c) => !known.has(c.key)).map((c) => c.label);
+  const recognisedCount = columns.filter((c) => known.has(c.key)).length;
+
+  return { ok: missing.length === 0, missing, unrecognised, recognisedCount };
+}
+
+export type RowCheck = {
+  ok: boolean;
+  rowCount: number;
+  validCount: number;
+  errors: Array<{ row: number; error: string }>;
+};
+
+/**
+ * Step 7: run every row past the same schema the store step uses, but write
+ * nothing.
+ *
+ * Validating and storing in one pass would mean a file with one bad row in the
+ * middle is half stored before the failure is known. Checking first keeps the
+ * two questions apart: "is this data valid" is step 7, "did it go in" is step 9.
+ */
+export function validateRows(rows: Array<Record<string, unknown>>): RowCheck {
+  const errors: Array<{ row: number; error: string }> = [];
+  let validCount = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      reportSchema.parse(prepareRow(rows[i]));
+      validCount++;
+    } catch (error) {
+      // +2: sheet rows are 1-based and row 1 is the header.
+      errors.push({ row: i + 2, error: describeError(error) });
+    }
+  }
+
+  return { ok: validCount > 0, rowCount: rows.length, validCount, errors };
+}
+
+/**
+ * The defaults a sheet row is given before it is judged. Shared by the check
+ * and the store so a row can never pass one and fail the other.
+ */
+function prepareRow(row: Record<string, unknown>) {
+  const raw = normaliseReadingFields(row);
+  if (!raw.siteName) raw.siteName = raw.projectSiteId || raw.monitoringStationId || 'Uploaded station';
+  if (!raw.location) raw.location = raw.projectSiteId ? String(raw.projectSiteId) : 'N/A';
+  if (!raw.integrationMethod) raw.integrationMethod = 'SFTP Excel upload';
+  // A free-text "other parameters" cell is kept as a labelled note.
+  if (typeof raw.otherParams === 'string' && raw.otherParams.trim()) {
+    raw.otherParams = { note: raw.otherParams.trim() };
+  }
+  return raw;
 }
 
 function describeError(error: unknown): string {

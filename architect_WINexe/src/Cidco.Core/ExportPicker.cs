@@ -4,7 +4,7 @@ namespace Cidco.Core;
 public static class ExportPicker
 {
     /// <summary>
-    /// The most recently written .csv (or .xlsx) in the export folder, or null
+    /// The most recently written .csv in the export folder, or null
     /// if there is nothing to send. An export that overwrites the same file
     /// every time works exactly as well as one that writes a new name.
     /// </summary>

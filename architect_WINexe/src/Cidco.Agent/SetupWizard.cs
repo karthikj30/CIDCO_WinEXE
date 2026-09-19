@@ -247,7 +247,8 @@ internal sealed class SetupWizard : Form
         var y = Heading(
             "Where is the AQI export saved?",
             "Pick the folder your monitoring software writes its CSV into. The agent takes the newest " +
-            "file from here every time it runs, and CIDCO checks this path on every transfer.");
+            "file from here every time it runs, renames it to your company id and the " +
+            "time, and sends that.");
 
         var box = new TextBox
         {
