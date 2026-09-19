@@ -295,7 +295,13 @@ The transfer log names the cause. The three you are most likely to meet:
 | --- | --- |
 | **Something is listening on *host:port*, but it is not an SFTP server** | The TCP connection worked, but whatever answered never sent an SSH greeting. Almost always the wrong port — the portal's rather than the SFTP intake's. Leave the port off the address entirely and the agent will look for the intake itself. |
 | **Nothing is listening on *host:port*** | The port is closed. Either the SFTP service is not running on CIDCO's side, or a firewall is dropping it. |
-| ***host:port* refused that username and password** | You reached an SSH server and it rejected the login. Check the port it names: if it says `:22`, the agent may have found the machine's own SSH service rather than CIDCO's intake, which would reject a CIDCO user id in just this way. The agent stops here rather than re-presenting a rejected password until the account locks. |
+| ***host:port* refused that username and password. That server is CIDCO's intake** | The address and port are right — you reached CIDCO. It is the user id or password they do not recognise. |
+| ***host:port* refused that username and password, and it is not CIDCO's intake** | You reached a different SSH server, named in the message — usually the machine's own SSH service on port 22, which has never heard of a CIDCO user id, so no password would work. Ask CIDCO which port their intake is on. |
+
+The agent can tell those two apart because every SSH server names itself before
+anyone authenticates. CIDCO's intake identifies as `ssh2js`; a machine's own
+service identifies as `OpenSSH`. Either way the agent stops rather than
+re-presenting a rejected password until the account locks.
 
 The **Result** column in the CIDCO pane says which of these each attempt was:
 `Accepted`, `No answer` (could not reach CIDCO), `Refused` (CIDCO turned the

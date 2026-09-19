@@ -250,9 +250,34 @@ public sealed class CidcoSender : ICidcoTransport
         var client = new SftpClient(info);
         client.HostKeyReceived += (_, e) => e.CanTrust = true;
         client.OperationTimeout = Timeout;
-        client.Connect();
+
+        try
+        {
+            client.Connect();
+        }
+        finally
+        {
+            // Every SSH server names itself before anyone authenticates, so
+            // this is known even when the login is then refused — and it is
+            // the one thing that says whether we reached CIDCO at all.
+            ServerSoftware = info.ServerVersion;
+        }
         return client;
     }
+
+    /// <summary>
+    /// What the last server we reached called itself, e.g.
+    /// "SSH-2.0-OpenSSH_9.6p1" or "SSH-2.0-ssh2js1.17.0".
+    /// </summary>
+    public string? ServerSoftware { get; private set; }
+
+    /// <summary>A machine's own SSH service, rather than CIDCO's intake.</summary>
+    private bool LooksLikeAnOperatingSystemSsh =>
+        ServerSoftware?.Contains("OpenSSH", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>CIDCO's intake, which is built on the ssh2 library.</summary>
+    private bool LooksLikeCidcosIntake =>
+        ServerSoftware?.Contains("ssh2js", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>Proves the credentials work, without sending anything.</summary>
     public SendResult CheckConnection()
@@ -379,14 +404,37 @@ public sealed class CidcoSender : ICidcoTransport
     private string RefusedLogin()
     {
         var where = $"{Host}:{Port}";
-        var aside = Port == 22
-            ? " Port 22 is often a machine's own SSH service rather than CIDCO's intake, " +
-              "which would reject a CIDCO user id like this. Check with CIDCO which port their SFTP intake is on."
-            : "";
 
-        return $"{where} refused that username and password.{aside}";
+        // Which server answered is the whole question, and it tells us
+        // itself. Without this an architect cannot distinguish "the password
+        // is wrong" from "this is not CIDCO", and the two need opposite fixes.
+        if (LooksLikeCidcosIntake)
+        {
+            return $"{where} refused that username and password. That server is CIDCO's intake " +
+                   $"({Pretty(ServerSoftware)}), so the address and port are right \u2014 it is the user id " +
+                   "or password that CIDCO does not recognise.";
+        }
+
+        if (LooksLikeAnOperatingSystemSsh)
+        {
+            return $"{where} refused that username and password, and it is not CIDCO's intake: the server " +
+                   $"there is {Pretty(ServerSoftware)}, which is the machine's own SSH service. It has never " +
+                   "heard of a CIDCO user id, so no password would work. Ask CIDCO which port their SFTP " +
+                   "intake is on \u2014 it is a separate service from the machine's own.";
+        }
+
+        var named = ServerSoftware is null ? "" : $" The server there is {Pretty(ServerSoftware)}.";
+        return $"{where} refused that username and password.{named}";
     }
 
+    /// <summary>"SSH-2.0-OpenSSH_9.6p1" reads better as "OpenSSH_9.6p1".</summary>
+    private static string Pretty(string? version)
+    {
+        var text = (version ?? "").Trim();
+        return text.StartsWith("SSH-2.0-", StringComparison.Ordinal) ? text["SSH-2.0-".Length..] : text;
+    }
+
+    /// <summary>
     /// <summary>
     /// Turns a failed connection into something an architect can act on.
     ///
