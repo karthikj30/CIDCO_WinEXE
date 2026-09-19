@@ -62,6 +62,18 @@ public sealed class CidcoSender : ICidcoTransport
     public string CsvFolder { get; }
     public TimeSpan Timeout { get; }
 
+    /// <summary>
+    /// A folder to upload into on an ordinary SFTP server.
+    ///
+    /// Empty for CIDCO, whose intake works out where a file belongs from the
+    /// company id and the declared path. Set when the architect named a folder
+    /// in the address, which points the agent at a plain server instead.
+    /// </summary>
+    public string RemoteDirectory { get; init; } = "";
+
+    /// <summary>True when this is a plain SFTP upload, not a CIDCO submission.</summary>
+    public bool IsPlainSftp => RemoteDirectory.Length > 0;
+
     public CidcoSender(
         string host,
         int port,
@@ -81,7 +93,9 @@ public sealed class CidcoSender : ICidcoTransport
     }
 
     /// <summary>Where this is sending, for the status line.</summary>
-    public string Describe => $"{CompanyId} \u2192 {Host}:{Port}";
+    public string Describe => IsPlainSftp
+        ? $"{Host}:{Port}{RemoteDirectory} (plain SFTP \u2014 not CIDCO)"
+        : $"{CompanyId} \u2192 {Host}:{Port}";
 
     public static CidcoSender From(Settings settings) => new(
         settings.IpOrDefault,
@@ -286,7 +300,11 @@ public sealed class CidcoSender : ICidcoTransport
         {
             using var client = Connect();
             client.Disconnect();
-            return new SendResult(true, $"Connected to CIDCO at {Host}:{Port}.");
+
+            return new SendResult(true, IsPlainSftp
+                ? $"Connected to {Host}:{Port} as {Username}. This is a plain SFTP server, not CIDCO \u2014 " +
+                  "files sent here are not validated or stored as compliance data."
+                : $"Connected to CIDCO at {Host}:{Port}.");
         }
         catch (SshAuthenticationException)
         {
@@ -311,7 +329,11 @@ public sealed class CidcoSender : ICidcoTransport
         if (!AqiCsv.IsAccepted(source.Name))
             return SendResult.Failed($"{source.Name} is not a .csv or .xlsx file", TransferOutcome.NothingToSend) with { FileName = source.Name };
 
-        var target = RemotePath.For(CompanyId, CsvFolder, source.Name);
+        // CIDCO's intake reads the company and the source folder out of the
+        // path; an ordinary server just wants a folder to write into.
+        var target = IsPlainSftp
+            ? RemotePath.Join(RemoteDirectory, source.Name)
+            : RemotePath.For(CompanyId, CsvFolder, source.Name);
 
         // Getting to CIDCO and being turned away by CIDCO are different
         // problems with different fixes, so they are caught separately. Saying
@@ -346,11 +368,24 @@ public sealed class CidcoSender : ICidcoTransport
         {
             // A rejection from CIDCO arrives as a permission error. Say so in
             // the architect's terms rather than leaking an SSH status code.
-            return SendResult.Failed($"{source.Name} — CIDCO refused the transfer ({Explain(error)})", TransferOutcome.RefusedByCidco)
+            var refusal = IsPlainSftp
+                ? $"{source.Name} \u2014 {Host}:{Port} would not take the file at {RemoteDirectory} " +
+                  $"({Explain(error)}). Check the folder exists and that {Username} may write to it."
+                : $"{source.Name} \u2014 CIDCO refused the transfer ({Explain(error)})";
+
+            return SendResult.Failed(refusal, TransferOutcome.RefusedByCidco)
                 with { FileName = source.Name, Remote = target };
         }
 
-        return new SendResult(true, $"{source.Name} sent to CIDCO")
+        var message = IsPlainSftp
+            // Not a compliance submission, and it must not read like one: no
+            // company was checked, no address, no path, and nothing was filed
+            // against a registration. Only the file transfer itself is proven.
+            ? $"{source.Name} uploaded to {Host}:{Port}{RemoteDirectory} \u2014 plain SFTP, " +
+              "so CIDCO has not validated or stored anything."
+            : $"{source.Name} sent to CIDCO";
+
+        return new SendResult(true, message)
         {
             FileName = source.Name,
             Remote = target,
@@ -404,6 +439,15 @@ public sealed class CidcoSender : ICidcoTransport
     private string RefusedLogin()
     {
         var where = $"{Host}:{Port}";
+
+        // A folder was named, so the architect is pointing at their own server
+        // on purpose. Telling them to ask CIDCO about ports would be nonsense.
+        if (IsPlainSftp)
+        {
+            var software = ServerSoftware is null ? "" : $" The server there is {Pretty(ServerSoftware)}.";
+            return $"{where} refused the username \"{Username}\" and that password.{software} " +
+                   "For a plain SFTP server these are that machine's own login, not CIDCO's.";
+        }
 
         // Which server answered is the whole question, and it tells us
         // itself. Without this an architect cannot distinguish "the password

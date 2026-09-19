@@ -36,6 +36,20 @@ public static class RemotePath
         return "/" + string.Join("/", parts);
     }
 
+    /// <summary>
+    /// A folder and a file name, joined for an ordinary SFTP server.
+    ///
+    /// No company prefix and no source folder: that layout belongs to CIDCO's
+    /// intake, and a plain server has never heard of it.
+    /// </summary>
+    public static string Join(string directory, string fileName)
+    {
+        var folder = Normalise(directory).TrimEnd('/');
+        var name = FileNameOnly(fileName);
+        if (folder.Length == 0 || folder == "/") return "/" + name;
+        return (folder.StartsWith('/') ? folder : "/" + folder) + "/" + name;
+    }
+
     /// <summary>The last segment, whichever slash the caller used.</summary>
     private static string FileNameOnly(string fileName)
     {

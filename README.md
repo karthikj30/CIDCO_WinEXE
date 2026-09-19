@@ -146,6 +146,7 @@ and the address says which:
 | `13.207.123.12:8010` | The SFTP intake on a port CIDCO named |
 | `http://13.207.123.12:8010` | CIDCO's **web portal**, over HTTP |
 | `https://cidco.example.gov.in` | The portal over HTTPS |
+| `13.207.123.12:22/home/ubuntu/uploads` | An **ordinary SFTP server** — the file goes straight into that folder |
 
 The portal door exists because its port is very often the one already open. The
 SFTP intake is a separate service on its own port, and a firewall that lets the
@@ -158,6 +159,23 @@ The choice is always written, never guessed. An agent that silently changed
 protocol because something unexpected answered would be impossible to reason
 about the first time it surprised somebody. The status line says which door is
 in use: *Connected · ABCD123 → 13.207.123.12:8010 (web portal)*.
+
+### Testing against your own server
+
+Name a folder in the address and the agent behaves like any other SFTP client:
+it signs in with **that server's own login** — not CIDCO's — and writes the file
+straight into the folder, with none of CIDCO's `/<companyId>/<path>/` layout.
+
+```
+13.207.123.12:22/home/ubuntu/uploads
+```
+
+That is how you prove a file really moves before CIDCO's side exists. It is
+emphatically **not** a compliance submission: no company is checked, no address,
+no file path, and nothing is filed against a registration. Every line says so —
+the status line reads *(plain SFTP — not CIDCO)* and each send ends *"plain
+SFTP, so CIDCO has not validated or stored anything."* A green line that looked
+like a real submission would be worse than a red one.
 
 ## Staying connected
 

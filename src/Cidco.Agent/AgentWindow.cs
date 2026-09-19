@@ -393,7 +393,10 @@ internal sealed class AgentWindow : Form
 
             // An SFTP intake found on a port worth remembering; the portal
             // carries its port in the address already.
-            if (sender is CidcoSender found)
+            // Only rewrite the address when the agent found the port itself,
+            // and even then keep the folder: dropping it would silently turn a
+            // plain SFTP destination back into a CIDCO one on the next run.
+            if (sender is CidcoSender found && !found.IsPlainSftp)
             {
                 _settings.Port = found.Port;
                 _ip.Text = found.Port == ServerAddress.StandardPort

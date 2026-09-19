@@ -67,6 +67,24 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
     public bool Secure { get; init; }
 
     /// <summary>
+    /// A folder on the server to upload into, taken from the address.
+    ///
+    /// Empty for CIDCO, whose intake decides where a file goes from the
+    /// company id and the path the agent declares. Set when the architect
+    /// names a folder outright — "13.207.123.12:22/home/ubuntu/uploads" — which
+    /// is how you point the agent at an ordinary SFTP server, CIDCO's layout
+    /// and validation being particular to CIDCO.
+    /// </summary>
+    public string RemoteDirectory { get; init; } = "";
+
+    /// <summary>
+    /// True when this address names an ordinary SFTP server rather than
+    /// CIDCO's intake. Nothing about it is validated by CIDCO, and nothing
+    /// sent to it counts as a compliance submission.
+    /// </summary>
+    public bool IsPlainSftp => Transport == Transport.Sftp && RemoteDirectory.Length > 0;
+
+    /// <summary>
     /// Reads what the architect typed. Accepts a bare address, one with a port
     /// after a colon, a bracketed IPv6 address, and an sftp:// or ssh:// URL
     /// pasted out of an email.
@@ -109,9 +127,17 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
         }
         value = value.TrimEnd('/');
 
-        // A path or credentials pasted along with the address are not ours.
+        // A path after the host is a plain SFTP destination: upload straight
+        // there, rather than into CIDCO's /<companyId>/<folder>/ tree. That is
+        // how an ordinary SFTP client behaves, and it is what a dry run against
+        // a test server needs — the CIDCO layout only exists on CIDCO's intake.
+        var remoteDirectory = "";
         var slash = value.IndexOf('/');
-        if (slash >= 0) value = value[..slash];
+        if (slash >= 0)
+        {
+            remoteDirectory = value[slash..];
+            value = value[..slash];
+        }
         var at = value.LastIndexOf('@');
         if (at >= 0) value = value[(at + 1)..];
 
@@ -182,7 +208,14 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
             return false;
         }
 
-        address = new ServerAddress(host, port, portWasGiven) { Transport = transport, Secure = secure };
+        address = new ServerAddress(host, port, portWasGiven)
+        {
+            Transport = transport,
+            Secure = secure,
+            // The portal's own path is fixed, so one pasted with a portal
+            // address is the page they copied it from, not a destination.
+            RemoteDirectory = transport == Transport.Sftp ? remoteDirectory : "",
+        };
         return true;
     }
 

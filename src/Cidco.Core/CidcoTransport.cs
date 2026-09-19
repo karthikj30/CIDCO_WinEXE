@@ -50,6 +50,18 @@ public static class CidcoTransports
             return (portal, portal.CheckConnection());
         }
 
+        if (address.IsPlainSftp)
+        {
+            // A folder was named, so this is an ordinary SFTP server. There is
+            // no intake to search for and no company to scope the path to.
+            var plain = new CidcoSender(address.Host, address.Port, username, password,
+                companyId, csvFolder, timeout)
+            {
+                RemoteDirectory = address.RemoteDirectory,
+            };
+            return (plain, plain.CheckConnection());
+        }
+
         var (sftp, result) = CidcoSender.FindIntake(
             address, username, password, companyId, csvFolder, timeout);
         return (sftp, result);
