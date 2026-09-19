@@ -1,6 +1,0 @@
-$kind: http-request
-url: "{{baseUrl}}/api/admin/comm-logs?handshakeId={{handshakeId}}"
-method: GET
-queryParams:
-  handshakeId: "{{handshakeId}}"
-order: 7000
