@@ -74,6 +74,21 @@ public sealed class CidcoSender : ICidcoTransport
     /// <summary>True when this is a plain SFTP upload, not a CIDCO submission.</summary>
     public bool IsPlainSftp => RemoteDirectory.Length > 0;
 
+    /// <summary>
+    /// A private key file to sign in with, instead of a password.
+    ///
+    /// A cloud server usually will not take a password at all: an AWS image
+    /// ships with PasswordAuthentication turned off and the default account
+    /// has no password set, so the key pair is the only way in. PuTTY's .ppk
+    /// and OpenSSH's .pem both work.
+    ///
+    /// When a key is set, the password box holds the key's passphrase, if it
+    /// has one — the same thing WinSCP does with it.
+    /// </summary>
+    public string PrivateKeyPath { get; init; } = "";
+
+    public bool UsesPrivateKey => PrivateKeyPath.Trim().Length > 0;
+
     public CidcoSender(
         string host,
         int port,
@@ -107,7 +122,11 @@ public sealed class CidcoSender : ICidcoTransport
 
     /// <summary>The same sender pointed at a different port.</summary>
     public CidcoSender On(int port) =>
-        new(Host, port, Username, _password, CompanyId, CsvFolder, Timeout);
+        new(Host, port, Username, _password, CompanyId, CsvFolder, Timeout)
+        {
+            RemoteDirectory = RemoteDirectory,
+            PrivateKeyPath = PrivateKeyPath,
+        };
 
     /// <summary>
     /// Finds CIDCO's intake behind an address, and connects to it.
@@ -125,7 +144,8 @@ public sealed class CidcoSender : ICidcoTransport
         string password,
         string companyId,
         string csvFolder,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        string privateKeyPath = "")
     {
         var ports = address.PortsToTry();
         CidcoSender? attempted = null;
@@ -133,7 +153,10 @@ public sealed class CidcoSender : ICidcoTransport
 
         foreach (var port in ports)
         {
-            var sender = new CidcoSender(address.Host, port, username, password, companyId, csvFolder, timeout);
+            var sender = new CidcoSender(address.Host, port, username, password, companyId, csvFolder, timeout)
+            {
+                PrivateKeyPath = privateKeyPath,
+            };
             var result = sender.CheckConnection();
             attempted = sender;
 
@@ -245,7 +268,7 @@ public sealed class CidcoSender : ICidcoTransport
         // CIDCO's host key is not distributed with the agent, so it is accepted
         // on sight. The credentials, not the host key, are what authorise the
         // upload, and CIDCO revalidates the company on every transfer.
-        var info = new ConnectionInfo(Host, Port, Username, new PasswordAuthenticationMethod(Username, _password))
+        var info = new ConnectionInfo(Host, Port, Username, AuthenticationMethod())
         {
             Timeout = Timeout,
         };
@@ -277,6 +300,27 @@ public sealed class CidcoSender : ICidcoTransport
             ServerSoftware = info.ServerVersion;
         }
         return client;
+    }
+
+    /// <summary>
+    /// How to prove who we are: the key if one was given, otherwise the
+    /// password.
+    /// </summary>
+    private AuthenticationMethod AuthenticationMethod()
+    {
+        if (!UsesPrivateKey) return new PasswordAuthenticationMethod(Username, _password);
+
+        var path = PrivateKeyPath.Trim();
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"No private key at \"{path}\".", path);
+
+        // The passphrase is whatever is in the password box; an unprotected
+        // key simply ignores it.
+        var key = _password.Length > 0
+            ? new PrivateKeyFile(path, _password)
+            : new PrivateKeyFile(path);
+
+        return new PrivateKeyAuthenticationMethod(Username, key);
     }
 
     /// <summary>
@@ -490,6 +534,22 @@ public sealed class CidcoSender : ICidcoTransport
     public string DiagnoseConnection(Exception error)
     {
         var where = $"{Host}:{Port}";
+
+        // A key we cannot read is a problem with this PC, not with the network.
+        if (error is FileNotFoundException missing)
+            return $"{missing.Message} Check the private key path.";
+
+        // A key SSH.NET cannot parse: the wrong sort of file, a corrupted one,
+        // or a passphrase-protected key with no passphrase given.
+        if (UsesPrivateKey &&
+            (error is System.Security.Cryptography.CryptographicException
+                   or FormatException
+                   or SshException { Message: "Invalid private key file." }))
+        {
+            return $"That private key could not be read \u2014 {error.Message} " +
+                   "A .ppk from PuTTY and a .pem from OpenSSH both work; if the key has a passphrase, " +
+                   "put it in the Password box.";
+        }
 
         // Something answered on the port but never sent the "SSH-2.0-…"
         // greeting that opens every SSH conversation. A web server does

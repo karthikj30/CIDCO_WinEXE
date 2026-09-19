@@ -109,6 +109,7 @@ Fill in the connection bar with what CIDCO emailed:
 | Password | `123456` |
 | Company ID | `ABCD123` |
 | File path | prefilled from the installer, e.g. `C:\CIDCO\exports` |
+| Private key | Leave blank for CIDCO. Needed for a server that will not take a password — see below |
 
 There is no port to fill in. CIDCO's intake is on port 2222, and that is the
 only port the agent will try on a guess — deliberately. Port 22 is the operating
@@ -159,6 +160,19 @@ The choice is always written, never guessed. An agent that silently changed
 protocol because something unexpected answered would be impossible to reason
 about the first time it surprised somebody. The status line says which door is
 in use: *Connected · ABCD123 → 13.207.123.12:8010 (web portal)*.
+
+### Signing in with a key instead of a password
+
+Most cloud servers will not take a password at all. An AWS image ships with
+`PasswordAuthentication no` and its default account (`ubuntu`, `ec2-user`) has
+no password set, so **no password is the right password** — and from the agent
+that looks exactly like bad credentials.
+
+Put the key file in the **Private key** box, or pick it with **Browse**. PuTTY's
+`.ppk` and OpenSSH's `.pem` both work, in either format version, and the Password
+box is then the key's passphrase if it has one — leave it empty if it does not.
+Only the path is remembered; the key stays where it is and the passphrase is
+never written down.
 
 ### Testing against your own server
 

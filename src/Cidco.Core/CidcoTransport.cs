@@ -40,7 +40,8 @@ public static class CidcoTransports
         string password,
         string companyId,
         string csvFolder,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        string privateKeyPath = "")
     {
         if (address.IsPortal)
         {
@@ -58,12 +59,13 @@ public static class CidcoTransports
                 companyId, csvFolder, timeout)
             {
                 RemoteDirectory = address.RemoteDirectory,
+                PrivateKeyPath = privateKeyPath,
             };
             return (plain, plain.CheckConnection());
         }
 
         var (sftp, result) = CidcoSender.FindIntake(
-            address, username, password, companyId, csvFolder, timeout);
+            address, username, password, companyId, csvFolder, timeout, privateKeyPath);
         return (sftp, result);
     }
 }

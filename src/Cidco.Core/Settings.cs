@@ -12,6 +12,7 @@ public static class SettingsKeys
     public const string CompanyId = "company_id";
     public const string InstalledAt = "installed_at";
     public const string InstallFolder = "install_folder";
+    public const string PrivateKeyPath = "private_key_path";
 }
 
 /// <summary>
@@ -33,6 +34,13 @@ public sealed class Settings
     public int Port { get; set; } = 2222;
     public string Username { get; set; } = "";
     public string CompanyId { get; set; } = "";
+
+    /// <summary>
+    /// The private key to sign in with, when the server will not take a
+    /// password — which is most cloud servers. Only the path is kept; the key
+    /// itself stays where it is, and its passphrase is never stored.
+    /// </summary>
+    public string PrivateKeyPath { get; set; } = "";
 
     public string InstalledAt { get; set; } = "";
     public string InstallFolder { get; set; } = "";
@@ -60,6 +68,7 @@ public sealed class Settings
             CompanyId = db.GetSetting(SettingsKeys.CompanyId) ?? "",
             InstalledAt = db.GetSetting(SettingsKeys.InstalledAt) ?? "",
             InstallFolder = db.GetSetting(SettingsKeys.InstallFolder) ?? "",
+            PrivateKeyPath = db.GetSetting(SettingsKeys.PrivateKeyPath) ?? "",
         };
 
         settings.IntervalSeconds = int.TryParse(db.GetSetting(SettingsKeys.IntervalSeconds), out var every)
@@ -79,6 +88,7 @@ public sealed class Settings
         db.SetSetting(SettingsKeys.Username, Username);
         db.SetSetting(SettingsKeys.CompanyId, CompanyId);
         db.SetSetting(SettingsKeys.InstallFolder, InstallFolder);
+        db.SetSetting(SettingsKeys.PrivateKeyPath, PrivateKeyPath);
         if (!string.IsNullOrEmpty(InstalledAt)) db.SetSetting(SettingsKeys.InstalledAt, InstalledAt);
     }
 

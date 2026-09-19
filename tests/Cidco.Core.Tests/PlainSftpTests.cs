@@ -119,9 +119,15 @@ public class LivePlainSftpTests
     private static string Password => Environment.GetEnvironmentVariable("CIDCO_TEST_PLAIN_PASSWORD") ?? "";
     private static string Dir => Environment.GetEnvironmentVariable("CIDCO_TEST_PLAIN_DIR") ?? "";
 
+    /// <summary>
+    /// These sign in with a password, so they need a server that takes one.
+    /// A key-only server — the shape of most cloud images — is covered by
+    /// LivePrivateKeyTests instead.
+    /// </summary>
     private static bool Available =>
         !string.IsNullOrWhiteSpace(Host) && Port is not null &&
-        !string.IsNullOrWhiteSpace(User) && !string.IsNullOrWhiteSpace(Dir);
+        !string.IsNullOrWhiteSpace(User) && !string.IsNullOrWhiteSpace(Dir) &&
+        !string.IsNullOrWhiteSpace(Password);
 
     private static FileInfo Export()
     {

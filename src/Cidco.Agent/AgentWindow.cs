@@ -31,8 +31,10 @@ internal sealed class AgentWindow : Form
     private readonly TextBox _password = new();
     private readonly TextBox _company = new();
     private readonly TextBox _folder = new();
+    private readonly TextBox _keyPath = new();
 
     private readonly Button _connect = new();
+    private readonly Button _browseKey = new();
     private readonly Button _refresh = new();
     private readonly Button _sendSelected = new();
     private readonly Button _sendNow = new();
@@ -81,7 +83,7 @@ internal sealed class AgentWindow : Form
         {
             Text = " Connect to CIDCO ",
             Dock = DockStyle.Top,
-            Height = 116,
+            Height = 166,
             Padding = new Padding(10, 6, 10, 6),
         };
 
@@ -125,6 +127,27 @@ internal sealed class AgentWindow : Form
         _folder.Font = Theme.Body;
         _folder.TextChanged += (_, _) => RefreshLocal();
         connect.Controls.Add(_folder);
+
+        // The key row. Cloud servers usually will not take a password at all,
+        // so this is how an architect signs in to one.
+        connect.Controls.Add(new Label
+        {
+            Text = "Private key (optional \u2014 .ppk or .pem, for servers that do not take a password)",
+            Font = Theme.Small,
+            ForeColor = Theme.Muted,
+            Location = new Point(14, 112),
+            Size = new Size(460, 14),
+        });
+        _keyPath.Location = new Point(14, 128);
+        _keyPath.Width = 480;
+        _keyPath.Font = Theme.Body;
+        connect.Controls.Add(_keyPath);
+
+        _browseKey.Text = "Browse\u2026";
+        _browseKey.Size = new Size(80, 24);
+        _browseKey.Location = new Point(502, 127);
+        _browseKey.Click += (_, _) => BrowseForKey();
+        connect.Controls.Add(_browseKey);
 
         _connect.Text = "Connect";
         _connect.Size = new Size(104, 30);
@@ -232,6 +255,7 @@ internal sealed class AgentWindow : Form
         _username.Text = _settings.UsernameOrDefault;
         _company.Text = _settings.CompanyIdOrDefault;
         _folder.Text = _settings.CsvFolder;
+        _keyPath.Text = _settings.PrivateKeyPath;
         _scheduleText.Text = $"Automatic sending is off · {Schedule.Describe(_settings.IntervalSeconds)}";
     }
 
@@ -265,7 +289,30 @@ internal sealed class AgentWindow : Form
             _username.Text.Trim(),
             _password.Text,
             _company.Text,
-            _folder.Text.Trim());
+            _folder.Text.Trim())
+        {
+            PrivateKeyPath = _keyPath.Text.Trim(),
+        };
+    }
+
+    /// <summary>Picks the private key file, the way any SSH client does.</summary>
+    private void BrowseForKey()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Select the private key CIDCO or your server administrator gave you",
+            Filter = "Private keys (*.ppk;*.pem;*.key)|*.ppk;*.pem;*.key|All files (*.*)|*.*",
+            CheckFileExists = true,
+        };
+
+        var current = _keyPath.Text.Trim();
+        if (current.Length > 0)
+        {
+            var folder = Path.GetDirectoryName(current);
+            if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder)) dialog.InitialDirectory = folder;
+        }
+
+        if (dialog.ShowDialog(this) == DialogResult.OK) _keyPath.Text = dialog.FileName;
     }
 
     private void RefreshLocal()
@@ -334,9 +381,11 @@ internal sealed class AgentWindow : Form
 
     private async Task ConnectAsync()
     {
-        if (_password.Text.Length == 0)
+        // A private key is a credential in its own right — on a server that
+        // takes keys there is usually no password to give.
+        if (_password.Text.Length == 0 && _keyPath.Text.Trim().Length == 0)
         {
-            Log(false, "Enter the CIDCO password before connecting.");
+            Log(false, "Enter the CIDCO password, or choose a private key, before connecting.");
             return;
         }
 
@@ -360,7 +409,9 @@ internal sealed class AgentWindow : Form
                 _username.Text.Trim(),
                 _password.Text,
                 _company.Text.Trim(),
-                _folder.Text.Trim()));
+                _folder.Text.Trim(),
+                timeout: null,
+                privateKeyPath: _keyPath.Text.Trim()));
         }
         catch (Exception error)
         {
@@ -390,6 +441,7 @@ internal sealed class AgentWindow : Form
             _settings.Username = _username.Text.Trim();
             _settings.CompanyId = _company.Text.Trim();
             _settings.CsvFolder = _folder.Text.Trim();
+            _settings.PrivateKeyPath = _keyPath.Text.Trim();
 
             // An SFTP intake found on a port worth remembering; the portal
             // carries its port in the address already.

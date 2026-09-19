@@ -8,6 +8,14 @@ dist/
 # downloaded straight from the repo without building anything.
 !dist/CIDCO_AQI_Agent.exe
 
+# Private keys. Never, under any circumstances, in a public repository — the
+# agent takes a path to one, so a key has no reason to be in the tree at all.
+*.ppk
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
 # The agent's own database, if one is ever created in the tree
 *.db
 *.db-wal
