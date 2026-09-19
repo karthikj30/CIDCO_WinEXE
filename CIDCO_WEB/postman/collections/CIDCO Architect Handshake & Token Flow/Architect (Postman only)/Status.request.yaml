@@ -1,0 +1,7 @@
+$kind: http-request
+url: "{{baseUrl}}/api/architect/status"
+method: GET
+headers:
+  x-client-id: "{{clientId}}"
+  x-client-secret: "{{clientSecret}}"
+order: 5000

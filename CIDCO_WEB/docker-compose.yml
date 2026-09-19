@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cidco_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cidco_password}
+      POSTGRES_DB: ${POSTGRES_DB:-cidco_aqi}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-cidco_user}:${POSTGRES_PASSWORD:-cidco_password}@db:5432/${POSTGRES_DB:-cidco_aqi}?schema=public
+      - NODE_ENV=production
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

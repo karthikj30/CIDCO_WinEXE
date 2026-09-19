@@ -1,0 +1,25 @@
+$kind: collection
+description: |-
+  End-to-end handshake, token and data flow between an architect and the CIDCO admin.
+
+  ## How to run
+  1. Set the `baseUrl` variable (default http://localhost:3000).
+  2. **Admin > Officer login** — signs in as the CIDCO officer (sets the session cookie for the admin calls).
+  3. **Admin > Issue handshake credentials** — issues {clientId, clientSecret, expiryDate} for an architect. The collection saves clientId + clientSecret into variables automatically.
+  4. **Architect > Validate** — the architect validates. 200 = established, 504 = rejected.
+  5. **Admin > Generate token** — mints a 7-day API token (saved to `token`).
+  6. **Architect > Send AQI data** — posts a reading with the Bearer token.
+  7. **Architect > Raise token request** then **Admin > List / Approve token request** — the renewal loop.
+  8. **Architect > Status / Logs** — the architect's timestamped view.
+
+  The admin requests rely on the session cookie set by 'Officer login'. The architect requests use only the credentials/token, exactly as an external system would from Postman.
+variables:
+  baseUrl: http://localhost:3000
+  adminEmail: officer@cidco.example
+  adminPassword: Password123
+  architectEmail: architect@example.com
+  clientId: ""
+  clientSecret: ""
+  handshakeId: ""
+  token: ""
+  tokenRequestId: ""

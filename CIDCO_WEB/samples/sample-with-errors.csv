@@ -1,0 +1,4 @@
+Site Name,Location,Date,AQI,PM2.5,pm10,lat,lng,notes
+Airoli Plot 8,"Airoli, Navi Mumbai",2026-08-05T09:00:00Z,88,30.1,70.2,19.1590,72.9990,Alias headers are accepted
+Missing AQI Row,"Nowhere, Navi Mumbai",2026-08-05T09:00:00Z,,10,20,,,This row is rejected
+Bad Date Row,"Somewhere, Navi Mumbai",not-a-date,120,10,20,,,This row is rejected too

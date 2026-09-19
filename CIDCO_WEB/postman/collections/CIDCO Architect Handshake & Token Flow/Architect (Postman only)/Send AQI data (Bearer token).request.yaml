@@ -1,0 +1,27 @@
+$kind: http-request
+description: For photos, switch the body to form-data and add 'document' and 'boardPhotos' file fields.
+url: "{{baseUrl}}/api/architect/data"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "siteName": "Kharghar Sector 12 Site",
+      "location": "Kharghar, Navi Mumbai",
+      "measuredAt": "2026-08-12T09:30:00Z",
+      "aqiValue": 168,
+      "pm25": 72.1,
+      "pm10": 150.4,
+      "latitude": 19.0330,
+      "longitude": 73.0630,
+      "projectCode": "CIDCO-KHR-012",
+      "remarks": "Sent over the handshake channel"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('stored', () => pm.response.to.have.status(201));
+    language: text/javascript
+order: 3000

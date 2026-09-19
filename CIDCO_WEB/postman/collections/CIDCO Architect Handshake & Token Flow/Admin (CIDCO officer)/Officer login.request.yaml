@@ -1,0 +1,21 @@
+$kind: http-request
+description: Signs in the CIDCO officer. Sets an httpOnly session cookie that the admin requests below reuse.
+url: "{{baseUrl}}/api/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{adminEmail}}",
+      "password": "{{adminPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('logged in', () => pm.response.to.have.status(200));
+      const u = pm.response.json().data.user;
+      pm.expect(u.role).to.not.eql('ARCHITECT');
+    language: text/javascript
+order: 1000

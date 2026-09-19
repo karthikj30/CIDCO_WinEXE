@@ -1,0 +1,19 @@
+node_modules/
+.next/
+out/
+build/
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+uploads/*
+!uploads/.gitkeep
+.DS_Store
+npm-debug.log*
+
+# SFTP intake: the server's host key and every workbook architects upload
+storage/
+
+# Prisma client is generated locally (npx prisma generate)
+src/generated/
+

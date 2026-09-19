@@ -1,26 +1,34 @@
-# Build output
-bin/
-obj/
-dist/
+# --- architect_WINexe ---
+architect_WINexe/bin/
+architect_WINexe/obj/
+architect_WINexe/dist/
+!architect_WINexe/dist/CIDCO_AQI_Agent.exe
 *.user
-
-# ...except the published executable, which is committed so it can be
-# downloaded straight from the repo without building anything.
-!dist/CIDCO_AQI_Agent.exe
-
-# Private keys. Never, under any circumstances, in a public repository — the
-# agent takes a path to one, so a key has no reason to be in the tree at all.
 *.ppk
 *.pem
 *.key
 id_rsa*
 id_ed25519*
-
-# The agent's own database, if one is ever created in the tree
 *.db
 *.db-wal
 *.db-shm
-
-# Editors
 .vs/
 .idea/
+
+# --- CIDCO_WEB ---
+CIDCO_WEB/node_modules/
+CIDCO_WEB/.next/
+CIDCO_WEB/out/
+CIDCO_WEB/build/
+CIDCO_WEB/.env
+CIDCO_WEB/.env.local
+CIDCO_WEB/*.tsbuildinfo
+CIDCO_WEB/next-env.d.ts
+CIDCO_WEB/uploads/*
+!CIDCO_WEB/uploads/.gitkeep
+CIDCO_WEB/storage/
+CIDCO_WEB/src/generated/
+.DS_Store
+npm-debug.log*
+
+architect_WINexe/.kilo/

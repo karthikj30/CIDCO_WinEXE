@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/api/admin/token-requests?status=PENDING"
+method: GET
+queryParams:
+  status: PENDING
+scripts:
+  - type: afterResponse
+    code: |-
+      const rows = pm.response.json().data.tokenRequests;
+      const pending = rows.find(r => r.status === 'PENDING');
+      if (pending) pm.collectionVariables.set('tokenRequestId', pending.id);
+    language: text/javascript
+order: 5000
