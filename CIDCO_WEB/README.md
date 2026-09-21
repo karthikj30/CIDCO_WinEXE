@@ -327,6 +327,10 @@ Full guide: **`/docs/sftp`** (in-app) and **`docs/SFTP_CHANNEL.md`**.
 
 ## Setup
 
+> Setting up a brand-new database — including the raw SQL for every table —
+> is in **[../db_commands.md](../db_commands.md)**.
+
+
 ### 1. Requirements
 
 - Node.js 18.18+ (developed on 22.x)
@@ -374,7 +378,7 @@ CIDCO_DATA_DIR="./storage/cidco-data"
 ### 5. Create the tables and seed demo data
 
 ```bash
-npx prisma migrate deploy   # applies prisma/migrations
+npx prisma migrate deploy   # applies prisma/migrations, creating every table
 npm run db:seed
 ```
 

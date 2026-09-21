@@ -109,6 +109,10 @@ NEXT_PUBLIC_APP_NAME="CIDCO AQI Compliance Portal"
 
 ### 2. Start PostgreSQL
 
+> Pointing at a **new, empty** database? It has no tables, so signing in fails
+> with *relation "users" does not exist*. Creating the schema is one command —
+> see **[db_commands.md](./db_commands.md)**, which also has the plain SQL.
+
 ```powershell
 docker run -d --name cidco-postgres `
   -e POSTGRES_USER=cidco `
