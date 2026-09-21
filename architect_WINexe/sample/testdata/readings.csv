@@ -1,0 +1,13 @@
+Project / Site ID,AQI Monitoring Station / Device ID,OEM / Model,Date & Time of Reading,AQI Value,PM2.5,PM10,NO₂,SO₂,CO,O₃,Temperature,Humidity,Other applicable environmental parameters,Data Source / Integration Method,Data Receipt Timestamp
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T00:00:00Z,123,63.2,130.6,41.7,5.0,0.72,61.5,31.8,45.6,noise=64 dB; wind=1.5 m/s,SFTP automatic upload,2026-09-21T00:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T01:00:00Z,156,83.2,177.2,20.6,23.6,1.41,34.6,33.6,63.6,noise=56 dB; wind=0.9 m/s,SFTP automatic upload,2026-09-21T01:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T02:00:00Z,93,58.7,78.2,41.8,15.7,0.73,30.8,34.5,77.6,noise=55 dB; wind=1.8 m/s,SFTP automatic upload,2026-09-21T02:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T03:00:00Z,257,65.0,136.7,31.0,23.9,1.43,57.7,37.4,79.1,noise=55 dB; wind=2.0 m/s,SFTP automatic upload,2026-09-21T03:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T04:00:00Z,204,44.7,128.9,17.8,15.8,1.42,34.8,24.3,78.3,noise=56 dB; wind=3.8 m/s,SFTP automatic upload,2026-09-21T04:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T05:00:00Z,85,64.5,66.5,25.5,6.6,1.33,39.5,26.1,66.4,noise=66 dB; wind=4.2 m/s,SFTP automatic upload,2026-09-21T05:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T06:00:00Z,82,32.8,199.7,46.2,13.1,0.75,55.3,37.5,70.7,noise=61 dB; wind=2.2 m/s,SFTP automatic upload,2026-09-21T06:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T07:00:00Z,106,111.2,164.6,38.6,15.6,0.95,18.1,29.9,64.7,noise=69 dB; wind=1.8 m/s,SFTP automatic upload,2026-09-21T07:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T08:00:00Z,220,54.7,187.5,52.4,12.6,0.80,36.2,24.3,68.2,noise=65 dB; wind=2.3 m/s,SFTP automatic upload,2026-09-21T08:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T09:00:00Z,170,105.7,99.5,10.1,11.0,1.13,19.9,28.1,52.5,noise=56 dB; wind=3.6 m/s,SFTP automatic upload,2026-09-21T09:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T10:00:00Z,170,85.4,140.9,54.2,13.6,0.62,74.2,34.1,67.0,noise=60 dB; wind=2.9 m/s,SFTP automatic upload,2026-09-21T10:00:11Z
+CIDCO-PNV-004,STN-PNV-02,Envirotech APM-550,2026-09-21T11:00:00Z,101,114.5,175.4,10.4,7.9,0.99,16.1,31.9,61.6,noise=60 dB; wind=2.3 m/s,SFTP automatic upload,2026-09-21T11:00:11Z

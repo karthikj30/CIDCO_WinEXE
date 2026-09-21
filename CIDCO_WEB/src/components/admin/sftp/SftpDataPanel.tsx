@@ -6,7 +6,7 @@ import { readJson } from '@/lib/fetchJson';
 /**
  * The DATA table, browsed as the folder tree it is stored in:
  *
- *   <companyId>/<month>/<timestamp>/<file>.csv
+ *   <companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv
  *
  * Each company node carries its MASTER row, so an officer reads the
  * registration and everything delivered under it in one place.
@@ -14,6 +14,8 @@ import { readJson } from '@/lib/fetchJson';
 type DataFile = {
   id: string;
   fileName: string;
+  /** The flat name the agent delivered it under, before poll1 filed it. */
+  deliveredName: string | null;
   relativePath: string;
   sizeBytes: number;
   rowCount: number;
@@ -39,10 +41,7 @@ type Node = {
     createdAt: string;
   };
   fileCount: number;
-  months: Array<{
-    monthFolder: string;
-    timestamps: Array<{ timestampFolder: string; files: DataFile[] }>;
-  }>;
+  days: Array<{ dateFolder: string; files: DataFile[] }>;
 };
 
 const fmt = (d: string) => new Date(d).toLocaleString('en-IN');
@@ -82,7 +81,7 @@ export default function SftpDataPanel() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Data</h2>
           <p className="mt-1 text-sm text-slate-500">
             Every CSV CIDCO has accepted, filed as{' '}
-            <code className="rounded bg-slate-100 px-1 font-mono text-xs">company / month / date / timestamp</code>.
+            <code className="rounded bg-slate-100 px-1 font-mono text-xs">companyId / dd_mm_yyyy / hh-mm-ss.csv</code>.
             Poll2 writes the AQI SFTP Ingestion Service status on each file.
           </p>
         </div>
@@ -147,67 +146,73 @@ export default function SftpDataPanel() {
                       </div>
                     </dl>
 
-                    {node.months.length === 0 ? (
+                    {node.days.length === 0 ? (
                       <p className="mt-4 text-xs text-slate-500">Nothing delivered under this company yet.</p>
                     ) : (
                       <div className="mt-4 space-y-2">
-                        {node.months.map((month) => {
-                          const key = `${node.company.companyId}/${month.monthFolder}`;
-                          const monthOpen = openMonth === key;
+                        {node.days.map((day) => {
+                          const key = `${node.company.companyId}/${day.dateFolder}`;
+                          const dayOpen = openMonth === key;
                           return (
                             <div key={key} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                               <button
-                                onClick={() => setOpenMonth(monthOpen ? null : key)}
+                                onClick={() => setOpenMonth(dayOpen ? null : key)}
                                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs hover:bg-slate-50"
                               >
-                                <span className="text-slate-400">{monthOpen ? '▾' : '▸'}</span>
+                                <span className="text-slate-400">{dayOpen ? '▾' : '▸'}</span>
                                 <span className="text-slate-400">📁</span>
-                                <span className="font-mono font-medium text-slate-800">{month.monthFolder}</span>
+                                <span className="font-mono font-medium text-slate-800">{day.dateFolder}</span>
                                 <span className="ml-auto text-slate-500">
-                                  {month.timestamps.length} transfer{month.timestamps.length === 1 ? '' : 's'}
+                                  {day.files.length} file{day.files.length === 1 ? '' : 's'}
                                 </span>
                               </button>
 
-                              {monthOpen && (
+                              {dayOpen && (
                                 <div className="space-y-2 border-t border-slate-100 px-4 py-3">
-                                  {month.timestamps.map((stamp) => (
-                                    <div key={stamp.timestampFolder}>
-                                      <p className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
-                                        <span>📁</span>
-                                        {stamp.timestampFolder}
-                                      </p>
-                                      <ul className="mt-1 space-y-1 pl-5">
-                                        {stamp.files.map((f) => (
-                                          <li key={f.id} className="space-y-1 text-xs">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                              <span className="text-slate-400">📄</span>
-                                              <span className="font-mono text-slate-800">{f.fileName}</span>
-                                              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-slate-600">
-                                                {f.pollStatus}
-                                              </span>
-                                              <span className="text-slate-400">{kb(f.sizeBytes)}</span>
-                                              <span className="text-slate-500">
-                                                {f.importedCount} of {f.rowCount} rows stored
-                                              </span>
-                                              <span className="text-slate-400">from {f.sourceIp ?? '—'}</span>
-                                              <span className="text-slate-400">{fmt(f.receivedAt)}</span>
-                                              <a
-                                                href={`/api/admin/sftp/data/${f.id}/download`}
-                                                className="font-semibold text-violet-700 hover:underline"
-                                              >
-                                                Download
-                                              </a>
-                                            </div>
-                                            {f.fileStatus && (
-                                              <pre className="ml-5 whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[10px] text-slate-700">
-                                                {f.fileStatus}
-                                              </pre>
-                                            )}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ))}
+                                  <ul className="space-y-2">
+                                    {day.files.map((f) => (
+                                      <li key={f.id} className="space-y-1 text-xs">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="text-slate-400">📄</span>
+                                          <span className="font-mono text-slate-800">{f.fileName}</span>
+                                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-slate-600">
+                                            {f.pollStatus}
+                                          </span>
+                                          <span className="text-slate-400">{kb(f.sizeBytes)}</span>
+                                          <span
+                                            className={
+                                              f.importedCount < f.rowCount
+                                                ? 'font-semibold text-amber-700'
+                                                : 'text-slate-500'
+                                            }
+                                          >
+                                            {f.importedCount} of {f.rowCount} rows stored
+                                            {f.importedCount < f.rowCount
+                                              ? ` · ${f.rowCount - f.importedCount} rejected`
+                                              : ''}
+                                          </span>
+                                          <span className="text-slate-400">from {f.sourceIp ?? '—'}</span>
+                                          <span className="text-slate-400">{fmt(f.receivedAt)}</span>
+                                          <a
+                                            href={`/api/admin/sftp/data/${f.id}/download`}
+                                            className="font-semibold text-violet-700 hover:underline"
+                                          >
+                                            Download
+                                          </a>
+                                        </div>
+                                        {f.deliveredName && (
+                                          <p className="ml-5 font-mono text-[10px] text-slate-400">
+                                            delivered as {f.deliveredName}
+                                          </p>
+                                        )}
+                                        {f.fileStatus && (
+                                          <pre className="ml-5 whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[10px] text-slate-700">
+                                            {f.fileStatus}
+                                          </pre>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
                                 </div>
                               )}
                             </div>

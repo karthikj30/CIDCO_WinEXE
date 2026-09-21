@@ -1,0 +1,14 @@
+Project / Site ID,AQI Monitoring Station / Device ID,OEM / Model,Date & Time of Reading,AQI Value,PM2.5,PM10,NO₂,SO₂,CO,O₃,Temperature,Humidity,Other applicable environmental parameters,Data Source / Integration Method,Data Receipt Timestamp
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T00:00:00Z,123,,145.7,51.7,,,36.7,24.7,47.4,noise=70 dB; wind=4.4 m/s,SFTP automatic upload,2026-09-21T00:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T01:00:00Z,176,70.7,136.7,37.2,19.5,1.29,40.1,30.6,74.8,noise=59 dB; wind=2.4 m/s,SFTP automatic upload,2026-09-21T01:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T02:00:00Z,97,97.4,176.8,26.1,7.6,1.57,22.3,30.4,61.0,noise=54 dB; wind=1.0 m/s,SFTP automatic upload,2026-09-21T02:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T03:00:00Z,192,,71.8,37.3,,,50.4,28.9,55.9,noise=61 dB; wind=3.3 m/s,SFTP automatic upload,2026-09-21T03:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T04:00:00Z,136,,182.4,38.2,,,44.1,26.5,53.9,noise=69 dB; wind=2.9 m/s,SFTP automatic upload,2026-09-21T04:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T05:00:00Z,169,45.7,120.8,18.0,4.0,1.17,60.6,26.0,64.0,noise=65 dB; wind=4.0 m/s,SFTP automatic upload,2026-09-21T05:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T06:00:00Z,147,66.6,149.4,47.3,14.1,0.87,62.1,37.4,56.4,noise=68 dB; wind=1.3 m/s,SFTP automatic upload,2026-09-21T06:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T07:00:00Z,130,115.5,160.1,19.4,5.0,0.61,64.6,34.6,52.4,noise=61 dB; wind=3.5 m/s,SFTP automatic upload,2026-09-21T07:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T08:00:00Z,155,,109.3,19.2,,,55.7,33.8,60.4,noise=57 dB; wind=2.6 m/s,SFTP automatic upload,2026-09-21T08:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T09:00:00Z,141,39.0,114.0,31.0,19.0,1.41,61.4,27.2,69.0,noise=63 dB; wind=0.8 m/s,SFTP automatic upload,2026-09-21T09:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T10:00:00Z,214,104.0,138.8,48.3,5.1,1.25,41.1,37.9,76.9,noise=56 dB; wind=1.6 m/s,SFTP automatic upload,2026-09-21T10:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T11:00:00Z,233,,197.9,52.8,,,29.3,37.7,53.4,noise=69 dB; wind=3.8 m/s,SFTP automatic upload,2026-09-21T11:00:11Z
+CIDCO-ULW-008,STN-ULW-03,Prana Air Sensible+,2026-09-21T12:00:00Z,197,80.6,112.1,18.4,4.5,0.21,23.1,34.7,48.1,noise=59 dB; wind=2.5 m/s,SFTP automatic upload,2026-09-21T12:00:11Z

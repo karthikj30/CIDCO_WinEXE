@@ -295,6 +295,23 @@ Accepted files land in the data table under
 `<companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv`, e.g.
 `ABCD123/21_09_2026/07-25-06.csv`.
 
+## Test exports
+
+`sample/testdata/` holds twelve generated exports for testing the whole chain —
+twelve deliberately inconsistent names (`Book1.csv`, `Sept Export (2).csv`,
+`MONITORING DATA FINAL.csv`, `kharghar site readings.csv`), ten to fourteen rows
+each, all sixteen columns, and different cells left blank in each.
+
+Point the agent at that folder and send them. Ten should read `CORRECT`; the
+other two are meant to fail, and `sample/testdata/README.md` says which and why.
+Regenerate with `node tools/make-test-csvs.mjs` — it is deterministic, so a
+diff means the generator changed.
+
+A blank **optional** parameter is stored as null and shows as `—` in the
+portal's data table. A blank **required** one — AQI Value or Date & Time of
+Reading — is not: that row is rejected at step 7 and the file status names the
+row and the reason.
+
 ## The CSV
 
 Row 1 is the header. These are the columns CIDCO reads, in order — see

@@ -1,0 +1,15 @@
+Project / Site ID,AQI Monitoring Station / Device ID,OEM / Model,Date & Time of Reading,AQI Value,PM2.5,PM10,NO₂,SO₂,CO,O₃,Temperature,Humidity,Other applicable environmental parameters,Data Source / Integration Method,Data Receipt Timestamp
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T00:00:00Z,123,46.7,153.3,11.7,5.0,0.34,54.2,35.2,65.8,noise=55 dB; wind=1.8 m/s,SFTP automatic upload,2026-09-21T00:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T01:00:00Z,185,64.4,116.5,23.1,7.5,0.53,42.8,29.2,62.9,noise=60 dB; wind=1.2 m/s,SFTP automatic upload,2026-09-21T01:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T02:00:00Z,98,116.8,86.1,40.8,23.5,0.60,48.1,28.3,52.7,noise=62 dB; wind=0.5 m/s,SFTP automatic upload,2026-09-21T02:00:11Z
+,,Oizom Polludrone,2026-09-21T03:00:00Z,159,116.8,179.4,17.9,11.8,1.55,16.8,31.7,79.4,noise=55 dB; wind=2.0 m/s,SFTP automatic upload,2026-09-21T03:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T04:00:00Z,102,44.0,69.1,48.3,9.5,0.28,18.7,34.6,59.2,noise=57 dB; wind=4.4 m/s,SFTP automatic upload,2026-09-21T04:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T05:00:00Z,211,36.3,77.9,14.3,22.7,1.09,41.2,26.0,45.3,noise=65 dB; wind=3.9 m/s,SFTP automatic upload,2026-09-21T05:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T06:00:00Z,179,38.5,194.2,47.8,14.6,0.24,65.6,37.3,49.2,noise=62 dB; wind=2.9 m/s,SFTP automatic upload,2026-09-21T06:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T07:00:00Z,232,117.6,87.8,32.3,9.8,1.14,57.8,37.0,46.2,noise=66 dB; wind=4.4 m/s,SFTP automatic upload,2026-09-21T07:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T08:00:00Z,123,62.2,70.2,25.2,5.8,1.03,35.5,31.5,74.0,noise=53 dB; wind=0.8 m/s,SFTP automatic upload,2026-09-21T08:00:11Z
+,,Oizom Polludrone,2026-09-21T09:00:00Z,126,50.7,191.3,41.4,13.0,0.85,52.2,26.8,59.7,noise=57 dB; wind=3.4 m/s,SFTP automatic upload,2026-09-21T09:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T10:00:00Z,145,113.4,137.7,22.9,20.9,1.56,24.6,25.9,46.9,noise=53 dB; wind=1.0 m/s,SFTP automatic upload,2026-09-21T10:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T11:00:00Z,208,52.3,69.1,51.6,12.9,0.96,65.9,33.7,49.3,noise=64 dB; wind=2.6 m/s,SFTP automatic upload,2026-09-21T11:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T12:00:00Z,253,30.3,141.4,51.0,19.7,1.05,46.7,28.6,50.2,noise=59 dB; wind=3.9 m/s,SFTP automatic upload,2026-09-21T12:00:11Z
+CIDCO-NER-021,STN-NER-11,Oizom Polludrone,2026-09-21T13:00:00Z,115,119.4,166.5,43.6,20.6,0.75,17.8,37.9,58.0,noise=62 dB; wind=2.9 m/s,SFTP automatic upload,2026-09-21T13:00:11Z

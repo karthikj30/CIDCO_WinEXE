@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
  * GET /api/admin/sftp/data
  *
  * The DATA table, shaped as the folder tree it is stored in:
- * company → month → timestamp → file. `companies` is the MASTER table and
- * each node carries its master row, so an officer can read both together.
+ * company → dd_mm_yyyy → file. `companies` is the MASTER table and each node
+ * carries its master row, so an officer can read both together.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -28,22 +28,29 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // Group into company → month → timestamp, newest first at every level.
+    // Group into company → day, newest first at both levels. The tree on disk
+    // is two deep now — <companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv — so a month
+    // level here would be a folder nobody could go and look at.
     type Row = (typeof files)[number];
-    const byCompany = new Map<string, Map<string, Map<string, Row[]>>>();
+    const byCompany = new Map<string, Map<string, Row[]>>();
     for (const file of files) {
-      const months = byCompany.get(file.companyId) ?? new Map<string, Map<string, Row[]>>();
-      const stamps = months.get(file.monthFolder) ?? new Map<string, Row[]>();
-      const list = stamps.get(file.timestampFolder) ?? [];
+      const days = byCompany.get(file.companyId) ?? new Map<string, Row[]>();
+      const list = days.get(file.dateFolder) ?? [];
       list.push(file);
-      stamps.set(file.timestampFolder, list);
-      months.set(file.monthFolder, stamps);
-      byCompany.set(file.companyId, months);
+      days.set(file.dateFolder, list);
+      byCompany.set(file.companyId, days);
     }
+
+    // dd_mm_yyyy does not sort as text — 02_10 would come before 21_09. Sort
+    // on the date it means, not the string it is written as.
+    const asDate = (dayFolder: string) => {
+      const [dd, mm, yyyy] = dayFolder.split('_');
+      return `${yyyy}-${mm}-${dd}`;
+    };
 
     const tree = companies
       .map((company) => {
-        const months = byCompany.get(company.companyId) ?? new Map<string, Map<string, Row[]>>();
+        const days = byCompany.get(company.companyId) ?? new Map<string, Row[]>();
         return {
           // The master row.
           company: {
@@ -58,32 +65,25 @@ export async function GET(req: NextRequest) {
             active: company.active,
             createdAt: company.createdAt,
           },
-          fileCount: [...months.values()].reduce(
-            (n, stamps) => n + [...stamps.values()].reduce((m, list) => m + list.length, 0),
-            0,
-          ),
-          months: [...months.entries()]
-            .sort((a, b) => b[0].localeCompare(a[0]))
-            .map(([monthFolder, stamps]) => ({
-              monthFolder,
-              timestamps: [...stamps.entries()]
-                .sort((a, b) => b[0].localeCompare(a[0]))
-                .map(([timestampFolder, list]) => ({
-                  timestampFolder,
-                  files: list.map((f: Row) => ({
-                    id: f.id,
-                    fileName: f.fileName,
-                    relativePath: f.relativePath,
-                    sizeBytes: f.sizeBytes,
-                    rowCount: f.rowCount,
-                    importedCount: f.importedCount,
-                    sourceIp: f.sourceIp,
-                    receivedAt: f.receivedAt,
-                    timestamp: f.timestamp,
-                    pollStatus: f.pollStatus,
-                    fileStatus: f.fileStatus,
-                  })),
-                })),
+          fileCount: [...days.values()].reduce((n, list) => n + list.length, 0),
+          days: [...days.entries()]
+            .sort((a, b) => asDate(b[0]).localeCompare(asDate(a[0])))
+            .map(([dateFolder, list]) => ({
+              dateFolder,
+              files: list.map((f: Row) => ({
+                id: f.id,
+                fileName: f.fileName,
+                deliveredName: f.deliveredName,
+                relativePath: f.relativePath,
+                sizeBytes: f.sizeBytes,
+                rowCount: f.rowCount,
+                importedCount: f.importedCount,
+                sourceIp: f.sourceIp,
+                receivedAt: f.receivedAt,
+                timestamp: f.timestamp,
+                pollStatus: f.pollStatus,
+                fileStatus: f.fileStatus,
+              })),
             })),
         };
       })

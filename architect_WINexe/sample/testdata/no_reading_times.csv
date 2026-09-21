@@ -1,0 +1,11 @@
+Project / Site ID,AQI Monitoring Station / Device ID,OEM / Model,Date & Time of Reading,AQI Value,PM2.5,PM10,NO₂,SO₂,CO,O₃,Temperature,Humidity,Other applicable environmental parameters,Data Source / Integration Method,Data Receipt Timestamp
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,123,63.0,65.0,15.0,11.6,1.03,46.0,32.9,66.4,noise=57 dB; wind=1.5 m/s,SFTP automatic upload,2026-09-21T00:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,252,60.3,103.0,43.6,6.2,0.96,44.6,37.5,55.0,noise=67 dB; wind=1.7 m/s,SFTP automatic upload,2026-09-21T01:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,160,39.7,119.0,35.5,7.5,1.34,25.3,31.6,58.8,noise=68 dB; wind=4.2 m/s,SFTP automatic upload,2026-09-21T02:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,198,98.4,157.8,50.0,4.7,1.26,34.4,24.2,71.6,noise=58 dB; wind=2.5 m/s,SFTP automatic upload,2026-09-21T03:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,139,43.8,180.3,25.1,21.4,1.27,41.8,30.7,62.7,noise=67 dB; wind=2.7 m/s,SFTP automatic upload,2026-09-21T04:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,179,30.1,95.9,41.8,8.6,1.50,48.2,26.0,56.2,noise=59 dB; wind=1.2 m/s,SFTP automatic upload,2026-09-21T05:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,81,79.8,130.8,18.2,21.5,0.28,47.8,28.0,67.8,noise=65 dB; wind=2.6 m/s,SFTP automatic upload,2026-09-21T06:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,180,119.0,179.7,10.9,12.9,1.49,73.2,33.9,77.1,noise=58 dB; wind=2.3 m/s,SFTP automatic upload,2026-09-21T07:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,161,93.9,90.8,29.2,8.7,0.45,42.0,30.0,48.1,noise=56 dB; wind=3.5 m/s,SFTP automatic upload,2026-09-21T08:00:11Z
+CIDCO-KHR-012,STN-KHR-07,Aeroqual AQY-1,,116,118.5,196.1,33.4,22.3,0.47,66.1,35.8,76.9,noise=65 dB; wind=2.5 m/s,SFTP automatic upload,2026-09-21T09:00:11Z

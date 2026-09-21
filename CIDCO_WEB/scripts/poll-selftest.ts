@@ -35,6 +35,23 @@ function goodCsv(rows = 2) {
   return [headerRow(), ...body].join('\n');
 }
 
+/** Good rows, but some are missing a required value — the row is dropped. */
+function partlyBlankCsv(rows: number, blankRowIndexes: number[]) {
+  const body = Array.from({ length: rows }, (_, i) =>
+    SHEET_COLUMNS.map((c) =>
+      quote(
+        c.key === 'measuredAt' ? new Date(Date.now() - i * 3_600_000).toISOString()
+        // AQI Value is required: blank it and this row cannot be stored.
+        : c.key === 'aqiValue' ? (blankRowIndexes.includes(i) ? '' : String(120 + i))
+        // Optional parameters left blank are stored as null, not rejected.
+        : ['ozone', 'temperature', 'humidity'].includes(c.key) && i % 2 === 0 ? ''
+        : String(c.example),
+      ),
+    ).join(','),
+  );
+  return [headerRow(), ...body].join('\n');
+}
+
 /** The right columns, nonsense in them — step 7's job, not step 6's. */
 function badDataCsv() {
   const body = SHEET_COLUMNS.map((c) =>
@@ -88,17 +105,20 @@ async function main() {
   await drop(`ABCD123_${empty}_AQI.csv`, '');
   await drop(`ABCD123_${wrongColumns}_AQI.csv`, 'foo,bar\n1,2\n');
   await drop(`ABCD123_${wrongData}_AQI.csv`, badDataCsv());
+  // 10 rows, 3 of them missing the required AQI Value.
+  const partly = stamp(-360);
+  await drop(`ABCD123_${partly}_AQI.csv`, partlyBlankCsv(10, [2, 5, 7]));
   // Not in the agent's naming scheme: poll1 must leave it alone.
   await drop('reading.csv', goodCsv());
 
   // --- poll1 -------------------------------------------------------------
   const poll1 = await runPoll1();
-  check('poll1 files every well-named CSV', poll1.moved === 5, `moved=${poll1.moved}`);
+  check('poll1 files every well-named CSV', poll1.moved === 6, `moved=${poll1.moved}`);
   check('poll1 refuses a name it cannot read', poll1.errors.some((e) => e.startsWith('reading.csv')));
   check('the refused file stays in the inbox', (await fs.readdir(inboxRoot())).includes('reading.csv'));
 
   const filed = await prisma.dataFile.findMany({ orderBy: { receivedAt: 'asc' } });
-  check('poll1 indexes every filed CSV', filed.length === 5, `rows=${filed.length}`);
+  check('poll1 indexes every filed CSV', filed.length === 6, `rows=${filed.length}`);
 
   for (const row of filed) {
     const parsed = parseAqiFileName(row.deliveredName!)!;
@@ -123,11 +143,30 @@ async function main() {
 
   const archived = done.filter((f) => f.pollStatus === 'ARCHIVED');
   const failed = done.filter((f) => f.pollStatus === 'FAILED');
-  check('the two good files are archived', archived.length === 2, `archived=${archived.length}`);
+  check('the good files are archived', archived.length === 3, `archived=${archived.length}`);
   check('the three broken files failed', failed.length === 3, `failed=${failed.length}`);
   check('an archived file reads CORRECT', archived.every((f) => f.fileStatus?.startsWith('CORRECT')));
+
+  // A file can pass all ten steps and still have lost rows. Saying plain
+  // CORRECT there would report a file that dropped three readings as perfect.
+  const partial = archived.find((f) => f.importedCount < f.rowCount);
+  check('a file that dropped rows does not read plain CORRECT', Boolean(partial),
+    partial ? `${partial.importedCount}/${partial.rowCount}` : 'no partial file');
+  check('  it says how many were rejected',
+    Boolean(partial?.fileStatus?.startsWith('CORRECT WITH REJECTED ROWS — 7 of 10 stored, 3 rejected')),
+    partial?.fileStatus?.split('\n')[0]);
+  check('  and step 7 keeps its detail rather than flattening to OK',
+    Boolean(partial?.fileStatus?.match(/7\. Validate data — OK: 7\/10 rows valid, 3 rejected/)),
+    partial?.fileStatus?.split('\n').find((l) => l.startsWith('7.')));
+  check('  its blank optional parameters are stored as null',
+    Array.isArray(partial?.aqiData) &&
+      (partial!.aqiData as Array<Record<string, unknown>>).some((r) => !r.ozone));
+
+  const clean = archived.find((f) => f.importedCount === f.rowCount);
+  check('a file that lost nothing still reads plain CORRECT',
+    clean?.fileStatus?.split('\n')[0] === 'CORRECT', clean?.fileStatus?.split('\n')[0]);
   check('an archived file carries its AQI rows',
-    archived.every((f) => Array.isArray(f.aqiData) && (f.aqiData as unknown[]).length === 2));
+    archived.every((f) => Array.isArray(f.aqiData) && (f.aqiData as unknown[]).length > 0));
 
   for (const row of archived) {
     // The date folder comes along, or every day's 11-30-24.csv would collide.

@@ -169,7 +169,10 @@ function formatFileStatus(steps: IngestionStepResult[]): string {
   return INGESTION_STEPS.map((step) => {
     const result = done.get(step);
     if (!result) return `${step} — NOT REACHED${failedAt ? ` (stopped at ${failedAt})` : ''}`;
-    return `${step} — ${result.ok ? 'OK' : `FAILED: ${result.detail}`}`;
+    if (!result.ok) return `${step} — FAILED: ${result.detail}`;
+    // A passing step carries its detail too — "7/10 rows valid, 3 rejected" is
+    // a pass, and it is also the only line that says what was lost.
+    return `${step} — OK${result.detail ? `: ${result.detail}` : ''}`;
   }).join('\n');
 }
 
@@ -636,8 +639,22 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
       });
       mark(INGESTION_STEPS[9], true, `archived to ${path.relative(process.cwd(), archivePath)}`);
 
-      const statusText = allCorrect(steps)
-        ? ['CORRECT', ...steps.map((s) => `${s.step} — OK`)].join('\n')
+      // A file can clear all ten steps and still have lost rows: step 7 keeps
+      // a file alive as long as *some* row is valid. Saying CORRECT there
+      // would report a file that quietly dropped three readings as perfect,
+      // which is the one thing the file status exists to prevent.
+      const rejected = outcome.rowCount - outcome.importedCount;
+      const headline = !allCorrect(steps)
+        ? null
+        : rejected > 0
+          ? `CORRECT WITH REJECTED ROWS — ${outcome.importedCount} of ${outcome.rowCount} stored, ` +
+            `${rejected} rejected`
+          : 'CORRECT';
+
+      // The per-step details are kept either way. Flattening them to "OK" threw
+      // away the very line that said which rows went missing.
+      const statusText = headline
+        ? [headline, formatFileStatus(steps)].join('\n')
         : formatFileStatus(steps);
 
       await prisma.dataFile.update({

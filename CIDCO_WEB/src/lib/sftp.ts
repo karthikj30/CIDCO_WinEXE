@@ -432,6 +432,16 @@ export async function importRows(params: {
  */
 export const REQUIRED_COLUMN_KEYS = ['measuredAt', 'aqiValue'] as const;
 
+/**
+ * Headers CIDCO publishes but does not store from the sheet.
+ *
+ * "Data Receipt Timestamp" is when CIDCO received the reading, so CIDCO sets
+ * it — but it is on the published column list, so architects send it. Without
+ * this it would be reported as an unrecognised header on every single file,
+ * which trains people to ignore that line just when it matters.
+ */
+const IGNORED_HEADERS = new Set(['datareceipttimestamp', 'datareceiptts']);
+
 export type ColumnCheck = {
   ok: boolean;
   /** Required AQI columns the header row does not carry. */
@@ -454,10 +464,11 @@ export type ColumnCheck = {
 export function validateColumns(columns: SheetColumn[]): ColumnCheck {
   const known = new Set(SHEET_COLUMNS.map((c) => c.key));
   const present = new Set(columns.map((c) => c.key));
+  const isKnown = (c: SheetColumn) => known.has(c.key) || IGNORED_HEADERS.has(headerSlug(c.label));
 
   const missing = REQUIRED_COLUMN_KEYS.filter((key) => !present.has(key));
-  const unrecognised = columns.filter((c) => !known.has(c.key)).map((c) => c.label);
-  const recognisedCount = columns.filter((c) => known.has(c.key)).length;
+  const unrecognised = columns.filter((c) => !isKnown(c)).map((c) => c.label);
+  const recognisedCount = columns.filter((c) => isKnown(c)).length;
 
   return { ok: missing.length === 0, missing, unrecognised, recognisedCount };
 }
