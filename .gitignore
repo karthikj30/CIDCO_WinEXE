@@ -36,3 +36,6 @@ CIDCO_WEB/src/generated/
 npm-debug.log*
 
 architect_WINexe/.kilo/
+
+# Local agent notes — not part of the shipped product
+memory-bank/
