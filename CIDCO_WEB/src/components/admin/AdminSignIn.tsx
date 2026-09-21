@@ -26,6 +26,23 @@ export default function AdminSignIn({ onSignedIn }: { onSignedIn: (user: AdminUs
       if (json.data.user.role === 'ARCHITECT') {
         throw new Error('This account is an architect. Sign in as a CIDCO officer.');
       }
+
+      // The password was right, but that is not the same as being signed in.
+      // The session lives in a cookie, and a browser silently refuses to store
+      // a Secure cookie on an http:// page — so this used to report success
+      // and then every panel answered "CIDCO officer sign-in required", with
+      // the officer's own name in the sidebar. Ask the server who we are
+      // before saying it worked.
+      const check = await fetch('/api/auth/me', { cache: 'no-store' });
+      if (!check.ok) {
+        throw new Error(
+          'Your password was accepted, but the browser did not keep the session cookie, so the ' +
+            'portal still sees you as signed out. This happens when the site is served over ' +
+            'http:// while the server marks the cookie Secure. Serve the portal over https, or ' +
+            'set COOKIE_SECURE=false in CIDCO_WEB/.env and restart it.',
+        );
+      }
+
       onSignedIn(json.data.user);
     } catch (err) {
       setError((err as Error).message);

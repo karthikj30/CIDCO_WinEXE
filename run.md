@@ -324,7 +324,9 @@ table** shows the rows and which parameters are missing.
 
 | What you see | What it means |
 | --- | --- |
-| *CIDCO officer sign-in required* | the account is an architect — step 3 |
+| *CIDCO officer sign-in required*, with the officer's name already in the sidebar | the browser is not keeping the session cookie. Serving over `http://` on a bare IP while the cookie is marked `Secure` does this, silently. Set `COOKIE_SECURE=false` in `.env` and restart, or serve over https |
+| *CIDCO officer sign-in required* on a fresh sign-in | the account is an architect — step 3 |
+| *Delivered transfers* stays empty | that page only shows CIDCO's own SFTP intake. Files dropped in a plain SFTP folder and picked up by the poll worker are under **Data** |
 | Files pile up in the dropbox | the poll worker is not running, or `CIDCO_INBOX_DIR` points elsewhere |
 | `poll1 … errors=… filename must be` | the file was not put there by the agent, so its name is not `companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv` |
 | Page loads unstyled | `.next/static` missing — rerun `npm run build` |

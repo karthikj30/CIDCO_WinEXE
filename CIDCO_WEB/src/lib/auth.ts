@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { NextRequest } from 'next/server';
 import { prisma } from './prisma';
 import type { Role, User } from '@prisma/client';
@@ -70,12 +70,40 @@ export function cookieForScope(scope: SessionScope) {
   return scope === 'ARCHITECT' ? ARCHITECT_COOKIE : OFFICER_COOKIE;
 }
 
+/**
+ * Whether to mark the session cookie `Secure`.
+ *
+ * This used to be `NODE_ENV === 'production'`, which is the usual shorthand
+ * and is wrong the moment a production build is served over plain HTTP. A
+ * browser will not store a Secure cookie on an http:// page — and it says
+ * nothing while refusing — so signing in appeared to work, the header came
+ * back with the cookie on it, and every request after that arrived with no
+ * session at all. The portal answered "CIDCO officer sign-in required" on a
+ * page that was showing the officer's own name in the sidebar.
+ *
+ * It follows the actual protocol now. Behind a reverse proxy that is
+ * `x-forwarded-proto`; set COOKIE_SECURE=true/false to decide it explicitly.
+ *
+ * (localhost is exempt from the rule in browsers, which is why this survives
+ * every local test and only shows up on a deployed IP.)
+ */
+async function useSecureCookies(): Promise<boolean> {
+  const explicit = process.env.COOKIE_SECURE?.trim().toLowerCase();
+  if (explicit === 'true' || explicit === '1') return true;
+  if (explicit === 'false' || explicit === '0') return false;
+
+  const jar = await headers();
+  const forwarded = jar.get('x-forwarded-proto') ?? '';
+  // A proxy chain can send "https,http"; the client-facing one is first.
+  return forwarded.split(',')[0].trim().toLowerCase() === 'https';
+}
+
 export async function setSessionCookie(token: string, scope: SessionScope) {
   const jar = await cookies();
   jar.set(cookieForScope(scope), token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: await useSecureCookies(),
     path: '/',
     maxAge: TOKEN_TTL_SECONDS,
   });

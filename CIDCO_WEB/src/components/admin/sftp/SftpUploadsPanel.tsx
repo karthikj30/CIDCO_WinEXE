@@ -213,9 +213,23 @@ export default function SftpUploadsPanel() {
       {loading && rows.length === 0 ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-          Nothing delivered yet. Transfers appear here the moment an architect sends a file to the SFTP
-          server.
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
+          <p>
+            Nothing has arrived through <strong>CIDCO&apos;s own SFTP intake</strong> yet. Transfers
+            appear here the moment an architect sends a file to it.
+          </p>
+          {/*
+            This page only ever shows what CIDCO's intake received. An agent
+            that uploads to a plain SFTP folder on this server is picked up by
+            the poll worker instead, and lands under Data — so a working setup
+            can leave this page empty for good, and saying only "nothing
+            delivered yet" reads like the data never arrived.
+          */}
+          <p className="text-xs">
+            Files the architect uploads to a plain SFTP folder on this server do not appear here.
+            Those are picked up by the poll worker and are listed under{' '}
+            <strong>Data</strong>, with their ingestion status.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
