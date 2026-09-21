@@ -24,7 +24,8 @@ CIDCO_WEB/node_modules/
 CIDCO_WEB/.next/
 CIDCO_WEB/out/
 CIDCO_WEB/build/
-CIDCO_WEB/.env
+# Keep CIDCO_WEB/.env in git so Codespaces/clones get DATABASE_URL.
+# Still ignore machine-specific overrides:
 CIDCO_WEB/.env.local
 CIDCO_WEB/*.tsbuildinfo
 CIDCO_WEB/next-env.d.ts

@@ -2,7 +2,7 @@ node_modules/
 .next/
 out/
 build/
-.env
+# .env is committed with local/Codespace defaults (DATABASE_URL required by Prisma).
 .env.local
 *.tsbuildinfo
 next-env.d.ts
