@@ -202,6 +202,134 @@ Shared SFTP defaults (override in `.env`): user `cidco@example.com` / password `
 
 ---
 
+## C. On the server, over PuTTY
+
+Deploying the latest build on the Ubuntu box. Everything below is one session.
+
+### 1. Pull and build
+
+```bash
+cd ~/CIDCO_WinEXE          # wherever you cloned it
+git pull
+
+cd CIDCO_WEB
+npm ci                     # not npm install — matches package-lock exactly
+npx prisma migrate deploy  # creates or updates every table
+npx prisma generate        # the client the app imports
+npm run build
+```
+
+`npm ci` fails if `package-lock.json` is missing; use `npm install` then.
+
+If `migrate deploy` answers **"The database schema is not empty"**, the tables
+were created from `prisma/full_schema.sql` rather than by Prisma, so there is
+no migration history for it to build on. Tell it the existing migrations are
+already applied — once, then it works normally from then on:
+
+```bash
+for m in $(ls prisma/migrations | grep -v migration_lock); do
+  npx prisma migrate resolve --applied "$m"
+done
+npx prisma migrate deploy      # "No pending migrations to apply."
+```
+
+### 2. Tell the polls where the agent drops files
+
+This is the step that decides whether anything appears on the portal. The
+Windows agent uploads over plain SFTP into a folder; **poll1 only looks at
+`CIDCO_INBOX_DIR`**, so if that is not the same folder, the files sit there and
+the portal stays empty. Files arriving are not ingestion — something has to go
+and read them.
+
+In `CIDCO_WEB/.env`:
+
+```
+CIDCO_INBOX_DIR="/home/ubuntu/cidco/sftp1"
+```
+
+The folder must be the one in the agent's address bar, and the user running the
+poll worker must be able to read **and delete** from it — poll1 moves files out.
+
+### 3. Make yourself a CIDCO officer
+
+Signing up on the portal creates an **architect**, which is why *Data* answers
+*CIDCO officer sign-in required*. Officers are created here, because an officer
+reads every company's data:
+
+```bash
+npm run officer:create -- you@cidco.gov.in "Your Name" YourPassword123
+```
+
+Run it on an email that already exists and it promotes that account instead,
+keeping the password:
+
+```bash
+npm run officer:create -- you@cidco.gov.in
+```
+
+Then **sign out in the browser first** — the cookie carries the old role until
+it is replaced — and sign in again at `/cidco`.
+
+### 4. Run it
+
+Two processes. The portal alone will never show data; the poll worker is what
+puts it there.
+
+```bash
+# terminal 1 — the portal
+npm start                          # port 3000
+
+# terminal 2 — the ingestion worker
+npm run poll
+```
+
+On a different port, use the standalone server:
+
+```bash
+PORT=8040 node .next/standalone/server.js
+```
+
+### 5. Keeping them up after you close PuTTY
+
+Closing the session kills both. `pm2` survives logout and reboots:
+
+```bash
+sudo npm install -g pm2
+cd ~/CIDCO_WinEXE/CIDCO_WEB
+
+pm2 start npm --name cidco-web  -- start
+pm2 start npm --name cidco-poll -- run poll
+pm2 save
+pm2 startup                      # run the sudo line it prints
+
+pm2 logs cidco-poll              # watch ingestion
+pm2 restart cidco-web cidco-poll # after a git pull + rebuild
+```
+
+Without pm2, `nohup npm start > web.log 2>&1 &` works but does not come back
+after a reboot.
+
+### 6. Checking it worked
+
+```bash
+ls ~/cidco/sftp1                 # should empty as poll1 files things away
+pm2 logs cidco-poll --lines 20   # "poll1 moved=1 … poll2 processed=1"
+```
+
+Then open the portal, sign in at `/cidco` as the officer, and the delivery is
+under **Data → the company → the date**, with its ten-step status. **Readings
+table** shows the rows and which parameters are missing.
+
+### If the portal is still empty
+
+| What you see | What it means |
+| --- | --- |
+| *CIDCO officer sign-in required* | the account is an architect — step 3 |
+| Files pile up in the dropbox | the poll worker is not running, or `CIDCO_INBOX_DIR` points elsewhere |
+| `poll1 … errors=… filename must be` | the file was not put there by the agent, so its name is not `companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv` |
+| Page loads unstyled | `.next/static` missing — rerun `npm run build` |
+| *Environment variable not found: DATABASE_URL* | `.env` was not read; in Docker pass it into the container |
+
 ## Quick end-to-end check
 
 1. Start Postgres + `npm run dev` + `npm run sftp` + `npm run poll` on CIDCO.

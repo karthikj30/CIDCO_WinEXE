@@ -7,7 +7,8 @@ export const registerSchema = z.object({
   firmName: z.string().optional().nullable(),
   councilRegNo: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
-  role: z.enum(['ARCHITECT', 'CIDCO_OFFICER']).optional(),
+  // No `role` here on purpose: public sign-up always creates an architect.
+  // See the register route.
 });
 
 export const loginSchema = z.object({

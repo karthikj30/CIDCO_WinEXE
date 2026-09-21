@@ -17,6 +17,7 @@
     "sftp": "prisma generate && tsx scripts/sftp-server.ts",
     "poll": "prisma generate && tsx scripts/poll-worker.ts",
     "poll:selftest": "prisma generate && tsx scripts/poll-selftest.ts",
+    "officer:create": "tsx scripts/create-officer.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

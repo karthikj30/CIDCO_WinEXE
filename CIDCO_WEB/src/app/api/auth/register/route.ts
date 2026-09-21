@@ -19,7 +19,13 @@ export async function POST(req: NextRequest) {
         email,
         name: data.name,
         passwordHash: await hashPassword(data.password),
-        role: data.role ?? 'ARCHITECT',
+        // Public sign-up makes architects, full stop. The role used to be
+        // taken from the request body, so anyone who could reach this endpoint
+        // could mint themselves a CIDCO officer with one curl — and an officer
+        // reads every company's data and approves submissions. Officers are
+        // created on the server, by someone with shell access:
+        // `npm run officer:create`.
+        role: 'ARCHITECT',
         firmName: data.firmName ?? null,
         councilRegNo: data.councilRegNo ?? null,
         phone: data.phone ?? null,
