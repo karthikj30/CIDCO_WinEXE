@@ -421,12 +421,7 @@ public sealed class CidcoSender : ICidcoTransport
         }
         catch (Exception error)
         {
-            var refusal = IsPlainSftp
-                ? $"{remoteName} \u2014 {Host}:{Port} would not take the file at {RemoteDirectory} " +
-                  $"({Explain(error)}). Check the folder exists and that {Username} may write to it."
-                : $"{remoteName} \u2014 CIDCO refused the transfer ({Explain(error)})";
-
-            return SendResult.Failed(refusal, TransferOutcome.RefusedByCidco)
+            return SendResult.Failed(Refusal(error, remoteName), TransferOutcome.RefusedByCidco)
                 with { FileName = remoteName, Remote = target };
         }
 
@@ -619,10 +614,49 @@ public sealed class CidcoSender : ICidcoTransport
         return $"Could not reach CIDCO at {where} — {Explain(error)}";
     }
 
+    /// <summary>
+    /// The technical reason, and nothing more.
+    ///
+    /// This used to append "check the company id, the designated IP and the
+    /// file path with CIDCO" to every permission denial. On CIDCO's intake
+    /// that is the advice; on an architect's own server CIDCO has no part in
+    /// it, and sending someone to ask CIDCO about their own AWS box is worse
+    /// than saying nothing. What to do about it now belongs to the caller,
+    /// which knows which server it is talking to.
+    /// </summary>
     private static string Explain(Exception error) =>
         error is SftpPermissionDeniedException
-            ? "permission denied — check the company id, the designated IP and the file path with CIDCO"
+            ? "permission denied"
             : error.Message.Trim() is { Length: > 0 } message
                 ? message
                 : error.GetType().Name;
+
+    /// <summary>
+    /// An upload that failed after the folder had already been found.
+    ///
+    /// The existence check ran first and passed, so the folder is there. That
+    /// rules one thing out for good, and the message should say so rather than
+    /// repeat "check the folder exists" — a denial here is about what this
+    /// login may do in a folder that demonstrably exists, which is a different
+    /// thing to go and fix.
+    /// </summary>
+    private string Refusal(Exception error, string remoteName)
+    {
+        if (!IsPlainSftp)
+        {
+            return $"{remoteName} \u2014 CIDCO refused the transfer ({Explain(error)})";
+        }
+
+        if (error is SftpPermissionDeniedException)
+        {
+            return $"{remoteName} \u2014 {Host}:{Port} found {RemoteDirectory} but would not let " +
+                   $"{Username} write into it (permission denied). The folder is there, so this is " +
+                   $"about access to it rather than the path. On the server, either give {Username} " +
+                   $"the folder \u2014 sudo chown -R {Username} {RemoteDirectory} \u2014 or point the " +
+                   $"address at one {Username} already owns.";
+        }
+
+        return $"{remoteName} \u2014 {Host}:{Port} would not take the file at {RemoteDirectory} " +
+               $"({Explain(error)}). The folder was found, so this is not the path.";
+    }
 }

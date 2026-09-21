@@ -255,6 +255,31 @@ nothing to do with where they land on the server, and it never travels with
 them — a local path like `\\192.168.1.100\common\karthik` means nothing to a
 Linux box.
 
+#### Preparing the folder on that server
+
+The agent writes one file and does nothing else — it will not create folders,
+and it does not need to. What it does need is a folder that exists and that
+**the login you connect as owns**:
+
+```bash
+# on the server, as someone who can
+sudo mkdir -p /home/ubuntu/cidco/sftp1
+sudo chown -R ubuntu /home/ubuntu/cidco/sftp1
+```
+
+A folder created with `sudo` belongs to `root`, and `ubuntu` cannot write into
+it even under `/home/ubuntu`. That is the usual cause of:
+
+```
+… found /home/ubuntu/cidco/sftp1 but would not let ubuntu write into it
+(permission denied). The folder is there, so this is about access to it rather
+than the path.
+```
+
+The agent checks the folder exists before it sends, so if you see *permission
+denied* rather than *path does not exist*, the path is already right and only
+the ownership is wrong.
+
 ### Where the file lands on your own server
 
 Name a base folder in the address and the agent drops the renamed file straight

@@ -261,6 +261,39 @@ public class LivePathCheckTests
         Assert.Contains("does not exist", result.Message);
     }
 
+    /// <summary>
+    /// A folder that is there but will not take the file.
+    ///
+    /// Needs a folder the login can see and not write into:
+    ///
+    ///     CIDCO_TEST_READONLY_DIR=/home/sftptest/cidco/sftp1   (owned by root)
+    /// </summary>
+    [SkippableFact]
+    public void A_folder_it_may_not_write_to_says_so_without_mentioning_CIDCO()
+    {
+        var readOnly = Environment.GetEnvironmentVariable("CIDCO_TEST_READONLY_DIR") ?? "";
+        Skip.If(!Available || readOnly.Length == 0, "no read-only folder configured");
+
+        var result = Connect(readOnly).Send(Export());
+
+        Assert.False(result.Ok);
+
+        // The existence check already passed, so the folder is not in question
+        // and the message must not send the architect back to look at it.
+        Assert.Contains("found " + readOnly, result.Message);
+        Assert.Contains("permission denied", result.Message);
+        Assert.DoesNotContain("Path does not exist", result.Message);
+
+        // It is their own server. CIDCO has no part in it, and the advice that
+        // belongs on CIDCO's intake would send them to the wrong people.
+        Assert.DoesNotContain("CIDCO", result.Message);
+        Assert.DoesNotContain("company id", result.Message);
+
+        // Something to actually do.
+        Assert.Contains("chown", result.Message);
+        Assert.Contains(User, result.Message);
+    }
+
     [SkippableFact]
     public void The_file_is_renamed_into_the_named_folder()
     {
