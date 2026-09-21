@@ -45,31 +45,62 @@ export type IngestionStepResult = {
   detail: string;
 };
 
-/** Filename the Windows agent always sends: ABCD123_2026-09-19_13-28-49_AQI.csv */
+/**
+ * The name the Windows agent always sends:
+ *
+ *   ABCD123_21_09_2026_11-30-24_AQI.csv
+ *
+ * Company id, date as dd_mm_yyyy, time as hh-mm-ss. It arrives flat because
+ * the agent may not create folders; poll1 takes it apart and builds the tree.
+ *
+ * The company id is matched non-greedily up to the date, so an id that itself
+ * contains underscores still parses.
+ */
 const AQI_FILE_RE =
-  /^(.+)_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_AQI\.(csv|xlsx)$/i;
+  /^(.+?)_(\d{2})_(\d{2})_(\d{4})_(\d{2})-(\d{2})-(\d{2})_AQI\.(csv|xlsx)$/i;
 
 export type ParsedAqiFileName = {
   companyId: string;
-  date: string; // yyyy-MM-dd
-  time: string; // HH-mm-ss
-  timestamp: string; // yyyy-MM-dd_HH-mm-ss
+  /** dd_mm_yyyy — the folder CIDCO files the day under. */
+  dateFolder: string;
+  /** hh-mm-ss — the name CIDCO gives the file itself. */
+  timeStem: string;
+  /** dd_mm_yyyy_hh-mm-ss, the two joined: one delivery, identified. */
+  timestamp: string;
   extension: string;
+  at: Date;
 };
 
 export function parseAqiFileName(fileName: string): ParsedAqiFileName | null {
   const base = path.basename(fileName);
   const match = AQI_FILE_RE.exec(base);
   if (!match) return null;
-  const [, companyId, date, time, extension] = match;
+
+  const [, companyId, dd, mm, yyyy, hh, mi, ss, extension] = match;
+  const at = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss));
+
+  // A name can be well-formed and still be nonsense — 32_13_2026 matches the
+  // pattern. Date rolls such a value over silently, so compare it back.
+  if (
+    at.getFullYear() !== Number(yyyy) || at.getMonth() !== Number(mm) - 1 || at.getDate() !== Number(dd) ||
+    at.getHours() !== Number(hh) || at.getMinutes() !== Number(mi) || at.getSeconds() !== Number(ss)
+  ) {
+    return null;
+  }
+
+  const dateFolder = `${dd}_${mm}_${yyyy}`;
+  const timeStem = `${hh}-${mi}-${ss}`;
   return {
     companyId,
-    date,
-    time,
-    timestamp: `${date}_${time}`,
+    dateFolder,
+    timeStem,
+    timestamp: `${dateFolder}_${timeStem}`,
     extension: extension.toLowerCase(),
+    at,
   };
 }
+
+const pathExists = (p: string) => fs.stat(p).then(() => true, () => false);
 
 export function inboxRoot() {
   return path.resolve(process.env.CIDCO_INBOX_DIR || './storage/inbox');
@@ -79,35 +110,46 @@ export function archiveRoot() {
   return path.resolve(process.env.CIDCO_ARCHIVE_DIR || './storage/archive');
 }
 
-/** month / date / timestamp folders from a parsed stamp. */
+/** The folder columns on the data row, derived from a parsed name. */
 export function folderPartsFromStamp(parsed: ParsedAqiFileName) {
-  const [y, m, d] = parsed.date.split('-').map(Number);
-  const [hh, mm, ss] = parsed.time.split('-').map(Number);
-  const at = new Date(y, m - 1, d, hh, mm, ss);
   return {
-    monthFolder: monthFolderFor(at),
-    dateFolder: parsed.date,
-    timestampFolder: parsed.timestamp,
-    at,
+    /** Kept as an index so a month can be listed without scanning days. */
+    monthFolder: monthFolderFor(parsed.at),
+    dateFolder: parsed.dateFolder,
+    timestampFolder: parsed.timeStem,
+    at: parsed.at,
   };
 }
 
 /**
  * Where poll1 files a CSV:
  *
- *   <dataRoot>/<companyId>/<month>/<date>/<timestamp>/<file>
+ *   <dataRoot>/<companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv
+ *
+ * The delivery time names the file, so the flat name the agent sent is not
+ * kept — the company is the folder above the date, and the date folder is the
+ * day. `suffix` distinguishes a second delivery landing on the same second,
+ * which would otherwise overwrite the first before poll2 ever saw it.
  */
-export function pollTreeLocation(companyId: string, fileName: string, parsed: ParsedAqiFileName) {
+export function pollTreeLocation(
+  companyId: string,
+  fileName: string,
+  parsed: ParsedAqiFileName,
+  suffix = 0,
+) {
   const company = safeFolder(companyId);
   const { monthFolder, dateFolder, timestampFolder } = folderPartsFromStamp(parsed);
-  const safeName = safeFolder(fileName).replace(/_+/g, '_');
-  const relativePath = `${company}/${monthFolder}/${dateFolder}/${timestampFolder}/${safeName}`;
+  const extension = parsed.extension === 'xlsx' ? 'xlsx' : 'csv';
+  const leaf = `${parsed.timeStem}${suffix > 0 ? `_${suffix + 1}` : ''}.${extension}`;
+  const relativePath = `${company}/${dateFolder}/${leaf}`;
+
   return {
     monthFolder,
     dateFolder,
     timestampFolder,
+    leaf,
     relativePath,
-    absolutePath: path.join(dataRoot(), company, monthFolder, dateFolder, timestampFolder, safeName),
+    absolutePath: path.join(dataRoot(), company, dateFolder, leaf),
   };
 }
 
@@ -183,11 +225,12 @@ export async function enqueueInboxFile(params: {
         companyRecordId: company.id,
         companyId: company.companyId,
         monthFolder: parsed ? folderPartsFromStamp(parsed).monthFolder : 'pending',
-        dateFolder: parsed?.date ?? 'pending',
-        timestampFolder: parsed?.timestamp ?? 'pending',
+        dateFolder: parsed?.dateFolder ?? 'pending',
+        timestampFolder: parsed?.timeStem ?? 'pending',
         timestamp: parsed?.timestamp ?? null,
         relativePath: `inbox/${inboxName}`,
         fileName: inboxName,
+        deliveredName: inboxName,
         sizeBytes: buffer.length,
         rowCount: 0,
         importedCount: 0,
@@ -242,7 +285,19 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
         });
       }
 
-      const where = pollTreeLocation(parsed.companyId, entry.name, parsed);
+      // The delivery time names the file, so two deliveries in the same second
+      // would land on the same name and the second would destroy the first
+      // before poll2 ever read it. Step back to a free name instead; poll2's
+      // duplicate check then reports it properly rather than data going quiet.
+      let where = pollTreeLocation(parsed.companyId, entry.name, parsed);
+      for (let n = 1; n < 100 && (await pathExists(where.absolutePath)); n++) {
+        where = pollTreeLocation(parsed.companyId, entry.name, parsed, n);
+      }
+      if (await pathExists(where.absolutePath)) {
+        errors.push(`${entry.name}: ${where.relativePath} and 99 alternatives all exist`);
+        continue;
+      }
+
       await fs.mkdir(path.dirname(where.absolutePath), { recursive: true });
       await fs.rename(inboxPath, where.absolutePath).catch(async () => {
         // Cross-device rename fallback.
@@ -271,12 +326,13 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
             timestampFolder: where.timestampFolder,
             timestamp: parsed.timestamp,
             relativePath: where.relativePath,
-            fileName: entry.name,
+            fileName: where.leaf,
+            deliveredName: entry.name,
             sizeBytes: (await fs.stat(where.absolutePath)).size,
             pollStatus: 'FILED',
             fileStatus: [
               `${INGESTION_STEPS[0]} — OK`,
-              `Filed at ${where.relativePath} (poll1)`,
+              `Filed ${entry.name} at ${where.relativePath} (poll1)`,
             ].join('\n'),
           },
         });
@@ -290,12 +346,13 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
             timestampFolder: where.timestampFolder,
             timestamp: parsed.timestamp,
             relativePath: where.relativePath,
-            fileName: entry.name,
+            fileName: where.leaf,
+            deliveredName: entry.name,
             sizeBytes: (await fs.stat(where.absolutePath)).size,
             pollStatus: 'FILED',
             fileStatus: [
               `${INGESTION_STEPS[0]} — OK`,
-              `Filed at ${where.relativePath} (poll1)`,
+              `Filed ${entry.name} at ${where.relativePath} (poll1)`,
             ].join('\n'),
             uploadId: upload?.id,
           },
@@ -374,9 +431,20 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
       mark(INGESTION_STEPS[2], true, path.extname(row.fileName).toLowerCase());
 
       // 4. Filename
-      const parsed = parseAqiFileName(row.fileName);
+      //
+      // The filed name is the delivery time — "11-30-24.csv" — so it no
+      // longer carries the company. What is validated is the name the agent
+      // actually sent, plus the tree poll1 filed it into: company folder,
+      // date folder, and a leaf that matches the time in the name. Checking
+      // the whole path is a stronger check than the old leaf-only one.
+      const parsed = parseAqiFileName(row.deliveredName ?? '');
       if (!parsed) {
-        mark(INGESTION_STEPS[3], false, 'expected companyId_yyyy-MM-dd_HH-mm-ss_AQI.csv');
+        mark(
+          INGESTION_STEPS[3],
+          false,
+          `delivered as "${row.deliveredName ?? '(not recorded)'}" — ` +
+            'expected companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv',
+        );
         await failRow(row.id, steps);
         continue;
       }
@@ -385,7 +453,21 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
         await failRow(row.id, steps);
         continue;
       }
-      mark(INGESTION_STEPS[3], true, parsed.timestamp);
+      if (!row.relativePath.startsWith(`${row.companyId}/${parsed.dateFolder}/`)) {
+        mark(
+          INGESTION_STEPS[3],
+          false,
+          `filed at ${row.relativePath}, but the name says ${row.companyId}/${parsed.dateFolder}/`,
+        );
+        await failRow(row.id, steps);
+        continue;
+      }
+      if (!row.fileName.startsWith(parsed.timeStem)) {
+        mark(INGESTION_STEPS[3], false, `filed as ${row.fileName}, but the name says ${parsed.timeStem}`);
+        await failRow(row.id, steps);
+        continue;
+      }
+      mark(INGESTION_STEPS[3], true, `${row.deliveredName} → ${row.relativePath}`);
 
       // 5. Project/Site (company registration)
       if (!row.company || !row.company.active) {
@@ -542,7 +624,11 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
       );
 
       // 10. Move to archive
-      const archivePath = path.join(archiveRoot(), row.companyId, path.basename(row.relativePath));
+      // The date folder comes along. Without it every day's "11-30-24.csv"
+      // would land on the same archive path and overwrite the day before.
+      const archivePath = path.join(
+        archiveRoot(), row.companyId, row.dateFolder, path.basename(row.relativePath),
+      );
       await fs.mkdir(path.dirname(archivePath), { recursive: true });
       await fs.rename(absolute, archivePath).catch(async () => {
         await fs.copyFile(absolute, archivePath);
@@ -562,7 +648,7 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
           rowCount: outcome.rowCount,
           importedCount: outcome.importedCount,
           aqiData: sheet.rows as unknown as Prisma.InputJsonValue,
-          relativePath: `archive/${row.companyId}/${path.basename(row.relativePath)}`,
+          relativePath: `archive/${row.companyId}/${row.dateFolder}/${path.basename(row.relativePath)}`,
         },
       });
 

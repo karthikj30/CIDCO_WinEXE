@@ -29,22 +29,41 @@ public static class RemotePath
     /// <summary>
     /// The fixed remote name every CSV is sent as:
     ///
-    ///     ABCD123_2026-09-19_13-28-49_AQI.csv
+    ///     ABCD123_21_09_2026_11-30-24_AQI.csv
     ///
-    /// Company id, then month-date-time, then the AQI suffix. The original
-    /// export name is discarded on purpose — CIDCO only needs this shape.
+    /// Company id, then the date as dd_mm_yyyy, then the time as hh-mm-ss,
+    /// then the AQI suffix. The original export name is discarded on purpose.
+    ///
+    /// It is one flat name rather than a folder path because the agent is not
+    /// allowed to create folders on the server. Everything CIDCO needs to file
+    /// it — the company and the moment — therefore has to travel in the name,
+    /// and poll1 takes it apart again to build
+    /// &lt;companyId&gt;/&lt;dd_mm_yyyy&gt;/&lt;hh-mm-ss&gt;.csv on CIDCO's side.
+    ///
+    /// The time is hyphenated, not "11:30:24". A colon is a reserved character
+    /// in a Windows file name — NTFS reads "11:30:24.csv" as an alternate data
+    /// stream on a file called "11" — so an officer who downloaded a
+    /// colon-named file could not save it. Linux accepts it; Windows is the
+    /// side that breaks, and both sides have to be able to hold this file.
     /// </summary>
     public static string AqiFileName(string companyId, DateTimeOffset at)
     {
         var company = companyId.Trim().Trim('/');
         if (company.Length == 0) company = "UNKNOWN";
-        var when = at.ToString("yyyy-MM-dd_HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture);
-        return $"{company}_{when}_AQI.csv";
+        return $"{company}_{DateFolder(at)}_{TimeStem(at)}_AQI.csv";
     }
+
+    /// <summary>The date as CIDCO files it: 21_09_2026.</summary>
+    public static string DateFolder(DateTimeOffset at) =>
+        at.ToString("dd_MM_yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The time as CIDCO names the file: 11-30-24.</summary>
+    public static string TimeStem(DateTimeOffset at) =>
+        at.ToString("HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// "C:/CIDCO/exports" + renamed file becomes
-    /// "/ABCD123/C:/CIDCO/exports/ABCD123_2026-09-19_13-28-49_AQI.csv".
+    /// "/ABCD123/C:/CIDCO/exports/ABCD123_21_09_2026_11-30-24_AQI.csv".
     /// </summary>
     public static string For(string companyId, string csvFolder, string fileName)
     {

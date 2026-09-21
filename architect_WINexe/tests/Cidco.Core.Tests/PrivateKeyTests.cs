@@ -211,7 +211,8 @@ public class LivePrivateKeyTests
 
 /// <summary>
 /// Limited write access: the agent checks that the named folder exists and
-/// refuses to create one. Files are renamed to companyId_timestamp_AQI.csv.
+/// refuses to create one. Files are renamed to
+/// companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv.
 /// </summary>
 public class LivePathCheckTests
 {
@@ -270,8 +271,15 @@ public class LivePathCheckTests
         Assert.True(result.Ok, result.Message);
         Assert.StartsWith(Base + "/", result.Remote);
         Assert.Contains("ABCD123_", result.Remote);
-        Assert.Contains($"_{now:yyyy-MM-dd}_", result.Remote);
+        // dd_mm_yyyy, the way CIDCO's poll1 reads it back.
+        Assert.Contains($"_{now:dd_MM_yyyy}_", result.Remote);
         Assert.EndsWith("_AQI.csv", result.Remote);
+        // A colon would be a reserved character in a Windows file name, and
+        // the file has to be openable on both sides.
+        Assert.DoesNotContain(":", result.Remote[(result.Remote.LastIndexOf('/') + 1)..]);
+        // One flat name, dropped in the folder the architect named — the agent
+        // does not build companyId/dd_mm_yyyy/ itself.
+        Assert.Equal(Base, RemotePath.ParentOf(result.Remote));
     }
 
     [SkippableFact]

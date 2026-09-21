@@ -13,7 +13,7 @@ file over and show them what CIDCO answered.
   ──────────────                              ─────
   C:\CIDCO\exports\readings.csv
         │
-        │  rename → ABCD123_2026-09-19_07-25-06_AQI.csv
+        │  rename → ABCD123_21_09_2026_07-25-06_AQI.csv
         │  SFTP (path must already exist — agent never creates folders)
         ▼
   /path/from/client/ABCD123_…_AQI.csv  ──►  inbox → poll1 tree → poll2 DB/archive
@@ -130,13 +130,24 @@ The local export keeps its own name. The copy that goes over the wire is always
 renamed:
 
 ```
-<Company ID>_<yyyy-MM-dd>_<HH-mm-ss>_AQI.csv
-e.g.  ABCD123_2026-09-19_13-28-49_AQI.csv
+<Company ID>_<dd_mm_yyyy>_<hh-mm-ss>_AQI.csv
+e.g.  ABCD123_21_09_2026_13-28-49_AQI.csv
 ```
 
-Company id, then the month, date and time of the send, then `_AQI.csv`. CIDCO's
-poll handlers read the company and the timestamp out of that name alone, which
-is why it is fixed. Two sends a second apart cannot overwrite each other.
+Company id, then the date as `dd_mm_yyyy`, then the time as `hh-mm-ss`, then
+`_AQI.csv`. CIDCO's poll1 reads the company and the moment out of that name
+alone and files it as `<companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv`, which is why
+the shape is fixed. Two sends a second apart cannot overwrite each other.
+
+The time is hyphenated, never `11:30:24`. A colon is a reserved character in a
+Windows file name — NTFS reads `11:30:24.csv` as an alternate data stream on a
+file called `11` — so a colon-named file could be written on the Linux server
+and then not be saveable by anyone who downloaded it. Linux accepts it; Windows
+is the side that breaks, and the file has to be openable on both.
+
+It is one flat name rather than a folder path because the agent is not allowed
+to create folders (see below). Everything CIDCO needs in order to file it
+therefore has to travel in the name.
 
 ### The agent does not create folders
 
@@ -200,27 +211,30 @@ never written down.
 
 ### Where the file lands on your own server
 
-Name a base folder in the address and the agent files the reading beneath it,
-in the same shape CIDCO's own data table uses:
+Name a base folder in the address and the agent drops the renamed file straight
+into it — one flat file, no tree:
 
 ```
 13.207.123.12:22/home/ubuntu/SFTP
 
   /home/ubuntu/SFTP/
-    ABCD123/                              the company id
-      2026-09-September/                  the month it was sent
-        2026-09-19/                       the day
-          readings_2026-09-19_13-28-49.csv
+    ABCD123_21_09_2026_13-28-49_AQI.csv
 ```
 
-**Any folder that is not there is created**, the whole way down — SFTP has no
-"make the parents too", so the agent creates each level in turn. A base folder
-that has never existed is fine.
+**The agent never creates a folder.** If the folder you named is not there, the
+transfer is refused and the log says so rather than the agent making it. That is
+deliberate: the architect's account needs permission to write one file and
+nothing else.
 
-The time is in the file name rather than another folder level. The agent sends
-on a schedule, so a plain `readings.csv` in a per-day folder would mean every
-send quietly destroying the one before it; losing compliance data silently is
-worse than a longer name.
+Building the tree is CIDCO's job. Their poll1 reads the company and the moment
+out of the file name and files it as:
+
+```
+  <data root>/
+    ABCD123/                    the company id
+      21_09_2026/               the day, dd_mm_yyyy
+        13-28-49.csv            the time it was sent
+```
 
 ### Testing against your own server
 
@@ -278,8 +292,8 @@ so — and CIDCO records it as `REJECTED` with the reason, with not one reading
 stored.
 
 Accepted files land in the data table under
-`<companyId>/<Month>/<timestamp>/<file>.csv`, e.g.
-`ABCD123/2026-09-September/2026-09-18_Friday_07-25-06/readings.csv`.
+`<companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv`, e.g.
+`ABCD123/21_09_2026/07-25-06.csv`.
 
 ## The CSV
 

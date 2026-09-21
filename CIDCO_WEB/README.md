@@ -214,16 +214,23 @@ unregistered or deactivated company id is refused at the door.
 Inbound files are **queued**, then processed by polls (not ingested inline):
 
 1. Intake → `storage/inbox/`
-2. **poll1** (`npm run poll`) → creates **`<companyId>/<month>/<date>/<timestamp>/`** and moves the CSV
+2. **poll1** (`npm run poll`) → creates **`<companyId>/<dd_mm_yyyy>/`** and files the CSV as `<hh-mm-ss>.csv`
 3. **poll2** → runs the AQI SFTP Ingestion Service (steps 1–10), inserts readings, sets `fileStatus`, moves to `storage/archive/`
 
 ```
 storage/cidco-data/
-└── ABCD123/
-    └── 2026-09-September/
-        └── 2026-09-18/
-            └── 2026-09-18_07-02-17/
-                └── ABCD123_2026-09-18_07-02-17_AQI.csv
+└── ABCD123/                 the company id
+    └── 21_09_2026/          the day, dd_mm_yyyy
+        └── 07-02-17.csv     the time the agent sent it
+
+The agent delivers one flat file, ABCD123_21_09_2026_07-02-17_AQI.csv, because
+it may not create folders. poll1 takes that name apart and builds the tree.
+The delivered name is kept on the row as `deliveredName` — the filed name no
+longer carries the company id, and step 4 validates what actually arrived.
+
+The time is hyphenated, never 11:30:24. A colon is reserved in a Windows file
+name (NTFS reads it as an alternate data stream), so a colon-named file would
+be unsaveable for anyone who downloaded it.
 ```
 
 Officers browse that tree under **Data** in `/cidco/sftp`, with the company's master row and each

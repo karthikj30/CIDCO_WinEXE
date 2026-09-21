@@ -43,12 +43,15 @@ function badDataCsv() {
   return [headerRow(), body].join('\n');
 }
 
-/** A timestamp in the shape the Windows agent sends, offset to keep names apart. */
+/**
+ * A stamp in the shape the Windows agent sends: dd_mm_yyyy_hh-mm-ss.
+ * Offset so each file in a run gets its own second.
+ */
 function stamp(offsetSeconds = 0) {
   const d = new Date(Date.now() + offsetSeconds * 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
   return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+    `${pad(d.getDate())}_${pad(d.getMonth() + 1)}_${d.getFullYear()}_` +
     `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`
   );
 }
@@ -98,10 +101,12 @@ async function main() {
   check('poll1 indexes every filed CSV', filed.length === 5, `rows=${filed.length}`);
 
   for (const row of filed) {
-    const parsed = parseAqiFileName(row.fileName)!;
-    const expected = `${row.companyId}/${row.monthFolder}/${row.dateFolder}/${parsed.timestamp}/${row.fileName}`;
-    check(`  ${row.fileName} filed as company/month/date/timestamp`, row.relativePath === expected, row.relativePath);
-    check(`  ${row.fileName} is on disk`, await exists(path.join(dataRoot(), row.relativePath)));
+    const parsed = parseAqiFileName(row.deliveredName!)!;
+    const expected = `${row.companyId}/${parsed.dateFolder}/${parsed.timeStem}.csv`;
+    check(`  ${row.deliveredName} filed as companyId/dd_mm_yyyy/hh-mm-ss.csv`,
+      row.relativePath === expected, row.relativePath);
+    check(`  ${row.relativePath} is on disk`, await exists(path.join(dataRoot(), row.relativePath)));
+    check(`  ${row.relativePath} has no colon in it`, !row.relativePath.includes(':'));
   }
 
   const auto = await prisma.company.findUnique({ where: { companyId: 'NEWCO777' } });
@@ -125,10 +130,10 @@ async function main() {
     archived.every((f) => Array.isArray(f.aqiData) && (f.aqiData as unknown[]).length === 2));
 
   for (const row of archived) {
-    check(`  ${row.fileName} moved to the archive`, await exists(path.join(archiveRoot(), row.companyId, row.fileName)));
-    const stillFiled = path.join(
-      dataRoot(), row.companyId, row.monthFolder, row.dateFolder, row.timestampFolder, row.fileName,
-    );
+    // The date folder comes along, or every day's 11-30-24.csv would collide.
+    check(`  ${row.relativePath} archived under its date`,
+      await exists(path.join(archiveRoot(), row.companyId, row.dateFolder, row.fileName)));
+    const stillFiled = path.join(dataRoot(), row.companyId, row.dateFolder, row.fileName);
     check(`  ${row.fileName} left the data tree`, !(await exists(stillFiled)));
   }
 
@@ -150,14 +155,33 @@ async function main() {
   check('readings reached the reports table',
     (await prisma.report.count({ where: { source: 'SFTP' } })) > 0);
 
+  // --- two deliveries landing on the same second -------------------------
+  const sameSecond = stamp(-300);
+  await drop(`ABCD123_${sameSecond}_AQI.csv`, goodCsv());
+  await runPoll1();
+  const firstOfPair = await prisma.dataFile.findFirst({ where: { deliveredName: `ABCD123_${sameSecond}_AQI.csv` } });
+  await drop(`ABCD123_${sameSecond}_AQI.csv`, goodCsv(3));
+  await runPoll1();
+  const pair = await prisma.dataFile.findMany({ where: { deliveredName: `ABCD123_${sameSecond}_AQI.csv` } });
+  check('a second delivery on the same second is kept, not overwritten', pair.length === 2, `rows=${pair.length}`);
+  check('  and it is filed under its own name',
+    new Set(pair.map((r) => r.relativePath)).size === 2, pair.map((r) => r.relativePath).join(' , '));
+  check('  the first file still exists',
+    await exists(path.join(dataRoot(), firstOfPair!.relativePath)));
+
   // --- the same delivery twice -------------------------------------------
   await drop(`ABCD123_${good}_AQI.csv`, goodCsv());
   await runPoll1();
   await runPoll2();
+  // `fileName` is the leaf now (11-30-24.csv), so the re-send is found by the
+  // flat name the agent delivered it under.
   const duplicate = await prisma.dataFile.findFirst({
-    where: { fileName: `ABCD123_${good}_AQI.csv`, pollStatus: 'FAILED' },
+    where: { deliveredName: `ABCD123_${good}_AQI.csv`, pollStatus: 'FAILED' },
+    orderBy: { receivedAt: 'desc' },
   });
-  check('a re-sent file is caught at step 8', Boolean(duplicate?.fileStatus?.includes('8. Check duplicate — FAILED')));
+  check('a re-sent file is caught at step 8',
+    Boolean(duplicate?.fileStatus?.includes('8. Check duplicate — FAILED')),
+    duplicate?.fileStatus?.split('\n').find((l) => l.startsWith('8.')));
 
   console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`);
   await prisma.$disconnect();

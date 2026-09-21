@@ -497,9 +497,14 @@ model DataFile {
   timestampFolder String
   /// Timestamp parsed from the filename (companyId_timestamp_AQI.csv).
   timestamp       String?
-  /// Path under the data root: <companyId>/<month>/<date>/<timestamp>/<file>
+  /// Path under the data root: <companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv
   relativePath    String
+  /// The name in the tree — the delivery time, e.g. "11-30-24.csv".
   fileName        String
+  /// The flat name the agent sent, e.g. "ABCD123_21_09_2026_11-30-24_AQI.csv".
+  /// Kept because the filed name no longer carries the company id, and step 4
+  /// of the ingestion service validates what actually arrived.
+  deliveredName   String?
   sizeBytes       Int
   rowCount        Int               @default(0)
   importedCount   Int               @default(0)

@@ -67,7 +67,10 @@ public class LiveServerTests
     {
         Assert.StartsWith(company + "_", name);
         Assert.EndsWith("_AQI.csv", name);
-        Assert.Matches(@"^.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_AQI\.csv$", name);
+        // companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv
+        Assert.Matches(@"^.+_\d{2}_\d{2}_\d{4}_\d{2}-\d{2}-\d{2}_AQI\.csv$", name);
+        // Never a colon: NTFS would read it as an alternate data stream.
+        Assert.DoesNotContain(":", name);
     }
 
     [SkippableFact]
@@ -79,7 +82,7 @@ public class LiveServerTests
         var result = Sender().Send(file);
 
         Assert.True(result.Ok, result.Message);
-        // readings.csv on disk, companyId_timestamp_AQI.csv on the wire.
+        // readings.csv on disk, companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv on the wire.
         AssertAqiName(result.FileName, Company);
         Assert.Equal($"/{Company}/{RegisteredPath.TrimStart('/')}/{result.FileName}", result.Remote);
         Assert.True(result.SizeBytes > 0);
