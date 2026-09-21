@@ -401,6 +401,38 @@ npm run build && npm start
 npm run sftp
 ```
 
+### If the site loads with no styling
+
+Every page answers 200, every stylesheet and script under `/_next/static/`
+answers 404, and the site renders as unstyled text. That is not a CSS problem —
+it is the assets not being served at all.
+
+`next.config.mjs` sets `output: 'standalone'`, which builds a self-contained
+`.next/standalone/server.js`. Next deliberately leaves `.next/static` and
+`public/` **out** of that bundle, because they are meant to go on a CDN. Run
+that server without them beside it and the HTML is all you get.
+
+`npm run build` now copies them in afterwards (`npm run postbuild`), so both
+ways of starting work:
+
+```bash
+npm start              # next start — serves .next itself
+npm run start:standalone   # node .next/standalone/server.js
+```
+
+If you build by any route that skips the postbuild hook, copy them by hand:
+
+```bash
+cp -r .next/static .next/standalone/.next/static
+```
+
+The Dockerfile already does this in its own `COPY` step, so container builds
+were never affected.
+
+If the assets 404 behind a reverse proxy instead, the proxy is not forwarding
+`/_next/` — that is the other way to get the same symptom, and it is fixed in
+the proxy, not here.
+
 The SFTP server generates its SSH host key on first boot and keeps it, with every uploaded workbook,
 under `SFTP_STORAGE_DIR` (gitignored).
 

@@ -150,6 +150,7 @@ Health should look like:
 | `npm run dev` | Next.js dev server on port 3000 |
 | `npm run build` | Generate Prisma client + production build |
 | `npm start` | Production server on port 3000 |
+| `npm run start:standalone` | The standalone server, `.next/standalone/server.js` |
 | `npm run db:generate` | `prisma generate` |
 | `npm run db:migrate` | Interactive migrate (`prisma migrate dev`) |
 | `npm run db:push` | Push schema without a migration |
