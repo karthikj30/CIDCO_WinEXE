@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import { missingPrismaModels, STALE_CLIENT_MESSAGE } from './prisma';
+import {
+  databaseUrlMissing,
+  missingPrismaModels,
+  NO_DATABASE_URL_MESSAGE,
+  STALE_CLIENT_MESSAGE,
+} from './prisma';
 
 export function ok<T>(data: T, status = 200) {
   return NextResponse.json({ success: true, data }, { status });
@@ -32,12 +37,28 @@ function isStaleClientError(error: unknown) {
   );
 }
 
+/**
+ * Prisma's own complaint when the variable is absent. Worth matching as well
+ * as checking process.env, because the variable can be present-but-empty, and
+ * because Prisma resolves it from schema.prisma rather than from us.
+ */
+function isMissingDatabaseUrlError(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  return /Environment variable not found: DATABASE_URL/.test(message);
+}
+
 /** Turns thrown errors into a predictable JSON envelope. */
 export function handleError(error: unknown) {
   if (error instanceof ZodError) {
     return fail('Validation failed', 422, error.flatten().fieldErrors);
   }
   console.error('[api]', error);
+
+  // Checked before the stale-client case: with no DATABASE_URL every query
+  // fails, and "regenerate your client" would send you after the wrong thing.
+  if (databaseUrlMissing || isMissingDatabaseUrlError(error)) {
+    return fail(NO_DATABASE_URL_MESSAGE, 500, { databaseUrlMissing: true });
+  }
 
   if (isStaleClientError(error)) {
     return fail(STALE_CLIENT_MESSAGE, 500, { stalePrismaClient: true });

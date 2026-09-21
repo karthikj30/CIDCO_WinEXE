@@ -36,3 +36,29 @@ if (missingPrismaModels.length > 0) {
   // Loud in the terminal, but the process stays up so the API can explain it.
   console.error(`[prisma] ${STALE_CLIENT_MESSAGE}`);
 }
+
+/**
+ * No DATABASE_URL.
+ *
+ * Prisma's own words for this are "Invalid `prisma.user.findUnique()`
+ * invocation: error: Environment variable not found: DATABASE_URL -->
+ * schema.prisma:7", which lands in front of whoever is trying to sign in and
+ * says nothing about what to do. It is nearly always one thing: the app was
+ * started somewhere the .env never reached — a fresh clone, a Codespace, or a
+ * container run without the variable passed in.
+ *
+ * Checked here and answered in plain words by the API, for the same reason as
+ * the stale-client case above: not thrown at import, so one missing variable
+ * does not take out every route and turn JSON responses into HTML error pages.
+ */
+export const databaseUrlMissing = !process.env.DATABASE_URL?.trim();
+
+export const NO_DATABASE_URL_MESSAGE =
+  'DATABASE_URL is not set, so the server cannot reach the database. ' +
+  'Copy CIDCO_WEB/.env.example to CIDCO_WEB/.env (or pass DATABASE_URL in the ' +
+  'environment), then restart. In Docker, pass it to the container \u2014 a .env ' +
+  'file on the host is not read inside one.';
+
+if (databaseUrlMissing) {
+  console.error(`[prisma] ${NO_DATABASE_URL_MESSAGE}`);
+}

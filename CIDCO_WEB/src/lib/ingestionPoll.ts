@@ -22,7 +22,7 @@ import {
  *   Poll 2  filed file → validate (10 steps) → DB → archive
  *
  * The Windows agent only drops a renamed CSV
- * (`companyId_yyyy-MM-dd_HH-mm-ss_AQI.csv`) into intake. Folder creation and
+ * (`companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv`) into intake. Folder creation and
  * database work live here.
  */
 
@@ -267,7 +267,7 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
     try {
       const parsed = parseAqiFileName(entry.name);
       if (!parsed) {
-        errors.push(`${entry.name}: filename must be companyId_yyyy-MM-dd_HH-mm-ss_AQI.csv`);
+        errors.push(`${entry.name}: filename must be companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv`);
         continue;
       }
 
