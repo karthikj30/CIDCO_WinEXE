@@ -45,6 +45,15 @@ type Node = {
   days: Array<{ dateFolder: string; files: DataFile[] }>;
 };
 
+type Health = {
+  lastRunAt: string | null;
+  secondsSinceLastRun: number | null;
+  waiting: number;
+  intervalMs: number;
+  stalled: boolean;
+  inboxDir: string;
+};
+
 const fmt = (d: string) => new Date(d).toLocaleString('en-IN');
 const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
 
@@ -58,6 +67,7 @@ export default function SftpDataPanel() {
   // "files" is the folder tree as delivered; "readings" is what is inside it.
   const [view, setView] = useState<'files' | 'readings'>('files');
   const [tableCompany, setTableCompany] = useState<string>('');
+  const [health, setHealth] = useState<Health | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +76,7 @@ export default function SftpDataPanel() {
       if (!res.ok) throw new Error(json.error ?? 'Failed to load');
       setTree(json.data.tree);
       setTotal(json.data.totalFiles);
+      setHealth(json.data.health ?? null);
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -118,6 +129,46 @@ export default function SftpDataPanel() {
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
+
+      {/*
+        A stopped poll worker is otherwise invisible here: files pile up in the
+        inbox while this page keeps showing the last thing that was ingested,
+        with nothing to say anything is wrong.
+      */}
+      {health?.stalled && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            The ingestion poll worker does not look like it is running.
+          </p>
+          <p className="mt-1">
+            {health.waiting > 0
+              ? `${health.waiting} file${health.waiting === 1 ? '' : 's'} ${
+                  health.waiting === 1 ? 'is' : 'are'
+                } waiting in ${health.inboxDir} and nothing is picking ${
+                  health.waiting === 1 ? 'it' : 'them'
+                } up.`
+              : `Nothing has been ingested recently, and the inbox ${health.inboxDir} is empty.`}{' '}
+            {health.lastRunAt
+              ? `Its last run was ${Math.round((health.secondsSinceLastRun ?? 0) / 60)} minute(s) ago.`
+              : 'It has not run at all since the data folder was created.'}
+          </p>
+          <p className="mt-2 font-mono text-xs">
+            cd CIDCO_WEB &amp;&amp; npm run poll
+            <span className="font-sans"> — or, so it survives logging out: </span>
+            pm2 start npm --name cidco-poll -- run poll
+          </p>
+        </div>
+      )}
+
+      {health && !health.stalled && health.lastRunAt && (
+        <p className="text-xs text-slate-500">
+          Poll worker last ran{' '}
+          {health.secondsSinceLastRun !== null && health.secondsSinceLastRun < 90
+            ? `${health.secondsSinceLastRun}s ago`
+            : new Date(health.lastRunAt).toLocaleString('en-IN')}
+          {health.waiting > 0 && ` · ${health.waiting} file(s) queued`}.
+        </p>
+      )}
       {!loading && view === 'files' && (
         <p className="text-xs text-slate-500">{total} file{total === 1 ? '' : 's'} stored.</p>
       )}

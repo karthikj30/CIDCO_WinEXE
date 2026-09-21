@@ -722,5 +722,79 @@ async function failRow(
 export async function runBothPolls() {
   const poll1 = await runPoll1();
   const poll2 = await runPoll2();
+  await recordHeartbeat({ moved: poll1.moved, processed: poll2.processed });
   return { poll1, poll2 };
+}
+
+// --- is the poll worker actually running? ---------------------------------
+//
+// Nothing in the portal used to know. Stop the worker — close the terminal it
+// was started in — and files pile up in the inbox while the portal shows the
+// last thing it ingested, with no hint that anything is wrong. The failure is
+// invisible exactly when it matters, so the worker now leaves a mark each
+// tick and the portal reads it.
+
+const HEARTBEAT_FILE = '.poll-heartbeat';
+
+function heartbeatPath() {
+  return path.join(dataRoot(), HEARTBEAT_FILE);
+}
+
+async function recordHeartbeat(counts: { moved: number; processed: number }) {
+  try {
+    await fs.mkdir(dataRoot(), { recursive: true });
+    await fs.writeFile(
+      heartbeatPath(),
+      JSON.stringify({ at: new Date().toISOString(), ...counts }),
+    );
+  } catch {
+    // A heartbeat that cannot be written must not stop the ingestion that
+    // just succeeded.
+  }
+}
+
+export type IngestionHealth = {
+  /** When the worker last finished a tick, if it has ever written one. */
+  lastRunAt: string | null;
+  secondsSinceLastRun: number | null;
+  /** Files sitting in the inbox right now, waiting to be filed. */
+  waiting: number;
+  /** The configured tick, so "overdue" means something. */
+  intervalMs: number;
+  /**
+   * The worker looks stopped: it has not ticked in several intervals, or it
+   * has never ticked at all while files are waiting.
+   */
+  stalled: boolean;
+  inboxDir: string;
+};
+
+export async function ingestionHealth(): Promise<IngestionHealth> {
+  const intervalMs = Number(process.env.POLL_INTERVAL_MS || 15_000);
+
+  let waiting = 0;
+  try {
+    const entries = await fs.readdir(inboxRoot(), { withFileTypes: true });
+    waiting = entries.filter((e) => e.isFile() && isAcceptedFile(e.name)).length;
+  } catch {
+    // No inbox yet is not a fault; nothing has been delivered.
+  }
+
+  let lastRunAt: string | null = null;
+  try {
+    const raw = JSON.parse(await fs.readFile(heartbeatPath(), 'utf8')) as { at?: string };
+    if (raw.at && !Number.isNaN(Date.parse(raw.at))) lastRunAt = raw.at;
+  } catch {
+    // Never run, or the file is unreadable — both mean "no recent tick".
+  }
+
+  const secondsSinceLastRun =
+    lastRunAt === null ? null : Math.max(0, Math.round((Date.now() - Date.parse(lastRunAt)) / 1000));
+
+  // Several intervals, not one: a slow tick on a big file is not a fault.
+  const overdueAfter = Math.max(60, (intervalMs / 1000) * 4);
+  const stalled =
+    secondsSinceLastRun === null ? waiting > 0 : secondsSinceLastRun > overdueAfter;
+
+  return { lastRunAt, secondsSinceLastRun, waiting, intervalMs, stalled, inboxDir: inboxRoot() };
 }

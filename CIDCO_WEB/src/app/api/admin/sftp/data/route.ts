@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleError, ok } from '@/lib/api';
 import { requireCidco } from '@/lib/guards';
+import { ingestionHealth } from '@/lib/ingestionPoll';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,7 +90,7 @@ export async function GET(req: NextRequest) {
       })
       .sort((a, b) => b.fileCount - a.fileCount);
 
-    return ok({ tree, totalFiles: files.length });
+    return ok({ tree, totalFiles: files.length, health: await ingestionHealth() });
   } catch (error) {
     return handleError(error);
   }

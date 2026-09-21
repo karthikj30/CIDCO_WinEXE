@@ -283,6 +283,12 @@ npm start                          # port 3000
 npm run poll
 ```
 
+**Both, every time.** The portal only reads what the worker has already
+ingested; on its own it will keep showing the last batch for ever while new
+files pile up in the dropbox. Closing the terminal the worker is in stops it —
+which is what step 5 is for. When it is not running, **Data** shows an amber
+banner saying so and how many files are waiting.
+
 On a different port, use the standalone server:
 
 ```bash
@@ -327,7 +333,8 @@ table** shows the rows and which parameters are missing.
 | *CIDCO officer sign-in required*, with the officer's name already in the sidebar | the browser is not keeping the session cookie. Serving over `http://` on a bare IP while the cookie is marked `Secure` does this, silently. Set `COOKIE_SECURE=false` in `.env` and restart, or serve over https |
 | *CIDCO officer sign-in required* on a fresh sign-in | the account is an architect — step 3 |
 | *Delivered transfers* stays empty | that page only shows CIDCO's own SFTP intake. Files dropped in a plain SFTP folder and picked up by the poll worker are under **Data** |
-| Files pile up in the dropbox | the poll worker is not running, or `CIDCO_INBOX_DIR` points elsewhere |
+| Files pile up in the dropbox | the poll worker is not running, or `CIDCO_INBOX_DIR` points elsewhere. **Data** says so in an amber banner when it notices |
+| A new company's files never appear | almost always the poll worker again — a company does not need registering first, poll1 creates it from the file name |
 | `poll1 … errors=… filename must be` | the file was not put there by the agent, so its name is not `companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv` |
 | Page loads unstyled | `.next/static` missing — rerun `npm run build` |
 | *Environment variable not found: DATABASE_URL* | `.env` was not read; in Docker pass it into the container |

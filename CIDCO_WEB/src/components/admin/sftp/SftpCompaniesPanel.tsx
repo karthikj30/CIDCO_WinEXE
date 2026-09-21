@@ -220,16 +220,20 @@ export default function SftpCompaniesPanel() {
           </div>
           <div>
             <label htmlFor="co-ip" className="mb-1 block text-xs font-medium text-slate-600">
-              Architect&rsquo;s server IP
+              Architect&rsquo;s server IP (optional)
             </label>
-            <input id="co-ip" required value={form.architectServerIp} onChange={set('architectServerIp')} className={INPUT} placeholder="203.0.113.9" />
-            <p className="mt-1 text-[11px] text-slate-400">Data is only accepted from this address.</p>
+            <input id="co-ip" value={form.architectServerIp} onChange={set('architectServerIp')} className={INPUT} placeholder="203.0.113.9 (optional)" />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Recorded on the company, for reference. It does not gate transfers: a file is filed by
+              the company and time in its name, whatever address it arrives from.
+            </p>
           </div>
           <div>
             <label htmlFor="co-path" className="mb-1 block text-xs font-medium text-slate-600">File path (optional)</label>
             <input id="co-path" value={form.filePath} onChange={set('filePath')} className={INPUT} placeholder="/var/aqi/exports" />
             <p className="mt-1 text-[11px] text-slate-400">
-              Optional. When blank, poll1 still accepts the file and builds company/month/date/timestamp.
+              Optional, and not checked. poll1 files every accepted CSV as
+              companyId/dd_mm_yyyy/hh-mm-ss.csv regardless of what is here.
             </p>
           </div>
           <div>
@@ -291,7 +295,7 @@ export default function SftpCompaniesPanel() {
               <dl className="mt-4 grid gap-4 text-xs sm:grid-cols-3">
                 <div>
                   <dt className="font-semibold uppercase tracking-wide text-slate-500">Architect server IP</dt>
-                  <dd className="mt-1 font-mono text-sm text-slate-900">{c.architectServerIp}</dd>
+                  <dd className="mt-1 font-mono text-sm text-slate-900">{c.architectServerIp || '\u2014'}</dd>
                 </div>
                 <div>
                   <dt className="font-semibold uppercase tracking-wide text-slate-500">File path</dt>

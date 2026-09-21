@@ -14,7 +14,12 @@ const companySchema = z.object({
     .max(60)
     .regex(/^[A-Za-z0-9._/-]+$/, 'Company id may use letters, digits, dot, dash, slash and underscore'),
   companyName: z.string().min(2, 'Company name is required').max(160),
-  architectServerIp: z.string().min(3, "The architect's server IP is required").max(64),
+  // Optional. It used to gate transfers — a file arriving from any other
+  // address was refused — and it no longer does: the company and the moment
+  // travel in the file name and poll1 files by those. Leaving it required only
+  // stopped a company being registered at all, which is worse than not
+  // knowing the address. Kept because it is still worth recording.
+  architectServerIp: z.string().max(64).optional().default(''),
   /// Optional — when blank, poll1 still accepts files and builds the tree.
   filePath: z.string().max(400).optional().default(''),
   publicKey: z.string().max(4000).optional(),
