@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { readJson } from '@/lib/fetchJson';
+import AqiReadingsTable from './AqiReadingsTable';
 
 /**
  * The DATA table, browsed as the folder tree it is stored in:
@@ -54,6 +55,9 @@ export default function SftpDataPanel() {
   const [error, setError] = useState<string | null>(null);
   const [openCompany, setOpenCompany] = useState<string | null>(null);
   const [openMonth, setOpenMonth] = useState<string | null>(null);
+  // "files" is the folder tree as delivered; "readings" is what is inside it.
+  const [view, setView] = useState<'files' | 'readings'>('files');
+  const [tableCompany, setTableCompany] = useState<string>('');
 
   const load = useCallback(async () => {
     try {
@@ -80,20 +84,47 @@ export default function SftpDataPanel() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Data</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Every CSV CIDCO has accepted, filed as{' '}
-            <code className="rounded bg-slate-100 px-1 font-mono text-xs">companyId / dd_mm_yyyy / hh-mm-ss.csv</code>.
-            Poll2 writes the AQI SFTP Ingestion Service status on each file.
+            {view === 'files' ? (
+              <>
+                Every CSV CIDCO has accepted, filed as{' '}
+                <code className="rounded bg-slate-100 px-1 font-mono text-xs">
+                  companyId / dd_mm_yyyy / hh-mm-ss.csv
+                </code>
+                . Poll2 writes the AQI SFTP Ingestion Service status on each file.
+              </>
+            ) : (
+              <>Every reading inside those files, with the parameters it is missing named on its own row.</>
+            )}
           </p>
         </div>
-        <button onClick={load} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-lg border border-slate-300">
+            {(['files', 'readings'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 text-sm font-semibold ${
+                  view === v ? 'bg-violet-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {v === 'files' ? 'Files' : 'Readings table'}
+              </button>
+            ))}
+          </div>
+          <button onClick={load} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
-      {!loading && <p className="text-xs text-slate-500">{total} file{total === 1 ? '' : 's'} stored.</p>}
+      {!loading && view === 'files' && (
+        <p className="text-xs text-slate-500">{total} file{total === 1 ? '' : 's'} stored.</p>
+      )}
 
-      {loading && tree.length === 0 ? (
+      {view === 'readings' ? (
+        <ReadingsView tree={tree} companyId={tableCompany} onCompany={setTableCompany} />
+      ) : loading && tree.length === 0 ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : tree.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
@@ -226,6 +257,62 @@ export default function SftpDataPanel() {
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The readings view needs one company at a time: the parameter columns only
+ * line up within a company, and a table of every company at once would be a
+ * list nobody could read across.
+ */
+function ReadingsView({
+  tree,
+  companyId,
+  onCompany,
+}: {
+  tree: Node[];
+  companyId: string;
+  onCompany: (id: string) => void;
+}) {
+  const withData = tree.filter((n) => n.fileCount > 0);
+  // Default to whichever company has actually delivered something, so the
+  // view opens on data rather than on an empty picker.
+  const selected = companyId || withData[0]?.company.companyId || '';
+  const node = withData.find((n) => n.company.companyId === selected);
+
+  if (withData.length === 0) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
+        Nothing has been ingested yet, so there are no readings to show.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <label htmlFor="readings-company" className="font-medium text-slate-600">
+          Company
+        </label>
+        <select
+          id="readings-company"
+          value={selected}
+          onChange={(e) => onCompany(e.target.value)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800"
+        >
+          {withData.map((n) => (
+            <option key={n.company.companyId} value={n.company.companyId}>
+              {n.company.companyName} ({n.company.companyId}) — {n.fileCount} file
+              {n.fileCount === 1 ? '' : 's'}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {node && (
+        <AqiReadingsTable companyId={node.company.companyId} companyName={node.company.companyName} />
       )}
     </div>
   );

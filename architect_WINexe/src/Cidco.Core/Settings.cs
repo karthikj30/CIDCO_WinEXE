@@ -13,6 +13,12 @@ public static class SettingsKeys
     public const string InstalledAt = "installed_at";
     public const string InstallFolder = "install_folder";
     public const string PrivateKeyPath = "private_key_path";
+
+    /// <summary>
+    /// Identifies the export the last accepted automatic send was taken from,
+    /// so an unchanged file is not sent again on the next tick.
+    /// </summary>
+    public const string LastSentExport = "last_sent_export";
 }
 
 /// <summary>

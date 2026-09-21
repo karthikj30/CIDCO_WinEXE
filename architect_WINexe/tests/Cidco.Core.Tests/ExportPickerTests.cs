@@ -109,3 +109,142 @@ public class AqiCsvTests
     public void Only_a_csv_is_sendable(string name, bool accepted) =>
         Assert.Equal(accepted, AqiCsv.IsAccepted(name));
 }
+
+/// <summary>
+/// What automatic sending picks out of a folder with many files in it.
+///
+/// The architect names a folder, not a file, so on every tick the agent has to
+/// decide by itself which export is the reading. It takes the most recently
+/// written one — and, because a folder full of files is the normal case rather
+/// than the exception, it has to make that choice the same way every time.
+/// </summary>
+public class NewestExportTests : IDisposable
+{
+    private readonly string _folder;
+
+    public NewestExportTests()
+    {
+        _folder = Path.Combine(Path.GetTempPath(), "cidco-newest-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_folder);
+    }
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_folder, recursive: true); } catch (IOException) { }
+    }
+
+    private FileInfo Write(string name, TimeSpan age, string body = "x")
+    {
+        var path = Path.Combine(_folder, name);
+        File.WriteAllText(path, body);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow - age);
+        return new FileInfo(path);
+    }
+
+    [Fact]
+    public void Out_of_a_crowded_folder_the_last_modified_one_goes()
+    {
+        Write("monday.csv", TimeSpan.FromDays(3));
+        Write("tuesday.csv", TimeSpan.FromDays(2));
+        Write("latest.csv", TimeSpan.FromMinutes(1));
+        Write("wednesday.csv", TimeSpan.FromDays(1));
+
+        Assert.Equal("latest.csv", ExportPicker.Newest(_folder)!.Name);
+    }
+
+    [Fact]
+    public void The_name_has_no_say_in_it()
+    {
+        // Not alphabetical, not "latest", not the one that looks newest.
+        Write("zzz-old.csv", TimeSpan.FromDays(5));
+        Write("aaa-new.csv", TimeSpan.FromMinutes(2));
+
+        Assert.Equal("aaa-new.csv", ExportPicker.Newest(_folder)!.Name);
+    }
+
+    [Fact]
+    public void A_file_rewritten_in_place_becomes_the_newest_again()
+    {
+        // The everyday case: monitoring software overwriting one export.
+        Write("readings.csv", TimeSpan.FromDays(1));
+        Write("other.csv", TimeSpan.FromHours(1));
+        Assert.Equal("other.csv", ExportPicker.Newest(_folder)!.Name);
+
+        Write("readings.csv", TimeSpan.Zero);
+        Assert.Equal("readings.csv", ExportPicker.Newest(_folder)!.Name);
+    }
+
+    [Fact]
+    public void Files_that_are_not_csvs_are_never_the_newest()
+    {
+        Write("readings.csv", TimeSpan.FromHours(4));
+        Write("notes.txt", TimeSpan.Zero);
+        Write("~lock.tmp", TimeSpan.Zero);
+        Write("report.xlsx", TimeSpan.Zero);
+
+        Assert.Equal("readings.csv", ExportPicker.Newest(_folder)!.Name);
+    }
+
+    [Fact]
+    public void A_tie_is_broken_the_same_way_every_time()
+    {
+        // Two exports written in the same clock tick. Left to the filesystem
+        // the order is arbitrary, so the agent could send a different one on
+        // each run with nothing having changed.
+        var at = TimeSpan.FromMinutes(5);
+        Write("alpha.csv", at);
+        Write("beta.csv", at);
+        Write("gamma.csv", at);
+
+        var first = ExportPicker.Newest(_folder)!.Name;
+        for (var i = 0; i < 5; i++) Assert.Equal(first, ExportPicker.Newest(_folder)!.Name);
+    }
+
+    [Fact]
+    public void The_listing_agrees_with_the_choice()
+    {
+        // The local pane shows newest first; whatever is at the top of it is
+        // what an unattended tick would send. If those two disagreed the
+        // architect would be watching one file and the agent sending another.
+        Write("old.csv", TimeSpan.FromDays(2));
+        Write("newest.csv", TimeSpan.FromSeconds(30));
+        Write("middle.csv", TimeSpan.FromHours(6));
+
+        Assert.Equal(ExportPicker.List(_folder)[0].Name, ExportPicker.Newest(_folder)!.Name);
+    }
+
+    // --- not sending the same reading twice --------------------------------
+
+    [Fact]
+    public void An_untouched_file_keeps_the_same_fingerprint()
+    {
+        var file = Write("readings.csv", TimeSpan.FromMinutes(10));
+        Assert.Equal(ExportPicker.Fingerprint(file), ExportPicker.Fingerprint(new FileInfo(file.FullName)));
+    }
+
+    [Fact]
+    public void Rewriting_the_same_name_changes_the_fingerprint()
+    {
+        var before = ExportPicker.Fingerprint(Write("readings.csv", TimeSpan.FromHours(3)));
+        var after = ExportPicker.Fingerprint(Write("readings.csv", TimeSpan.Zero));
+        Assert.NotEqual(before, after);
+    }
+
+    [Fact]
+    public void A_file_rewritten_within_the_same_second_still_differs()
+    {
+        // Write time alone would call these two the same reading.
+        var at = TimeSpan.FromMinutes(1);
+        var before = ExportPicker.Fingerprint(Write("readings.csv", at, "one row"));
+        var after = ExportPicker.Fingerprint(Write("readings.csv", at, "two rows, longer"));
+        Assert.NotEqual(before, after);
+    }
+
+    [Fact]
+    public void Two_different_exports_never_share_a_fingerprint()
+    {
+        var a = Write("morning.csv", TimeSpan.FromHours(2));
+        var b = Write("evening.csv", TimeSpan.FromHours(2));
+        Assert.NotEqual(ExportPicker.Fingerprint(a), ExportPicker.Fingerprint(b));
+    }
+}

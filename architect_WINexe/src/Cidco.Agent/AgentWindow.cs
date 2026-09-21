@@ -501,6 +501,27 @@ internal sealed class AgentWindow : Form
             // is a moment worth trying: not while waiting out a backoff, and
             // not at all while something needs a person.
             if (!_link.ShouldTry(now)) return;
+
+            // Automatic sending takes the newest export in the folder. If the
+            // monitoring software has not written since the last send, that
+            // newest file is the one already delivered — and sending it again
+            // would file the same readings under a fresh timestamp, which
+            // CIDCO cannot tell from genuinely new data. So the tick waits.
+            file ??= ExportPicker.Newest(_settings.CsvFolder);
+            if (file is null)
+            {
+                Log(false, $"Nothing to send — no .csv in {(string.IsNullOrWhiteSpace(_settings.CsvFolder) ? "(no folder set)" : _settings.CsvFolder)}.");
+                return;
+            }
+
+            var fingerprint = ExportPicker.Fingerprint(file);
+            if (_db.GetSetting(SettingsKeys.LastSentExport) == fingerprint)
+            {
+                Log(false,
+                    $"{file.Name} has not changed since it was last sent — nothing new to send. " +
+                    "The next reading goes as soon as it is written.");
+                return;
+            }
         }
         else if (!_link.Healthy && _link.ConsecutiveFailures == 0)
         {
@@ -518,6 +539,15 @@ internal sealed class AgentWindow : Form
 
             var wasDown = !_link.Healthy && _link.ConsecutiveFailures > 0;
             _link.Record(result, DateTimeOffset.Now);
+
+            // Remember the export only once CIDCO has taken it. Recording it
+            // on a failed send would mean a reading that never arrived is
+            // never retried.
+            if (result.Ok && file is not null)
+            {
+                file.Refresh();
+                if (file.Exists) _db.SetSetting(SettingsKeys.LastSentExport, ExportPicker.Fingerprint(file));
+            }
 
             // Only say "back" when there was something to come back from.
             if (result.Ok && wasDown) Log(true, "CIDCO is reachable again — sending resumed.");

@@ -30,6 +30,11 @@ public static class ExportPicker
             return directory.EnumerateFiles()
                 .Where(f => AqiCsv.IsAccepted(f.Name))
                 .OrderByDescending(f => f.LastWriteTimeUtc)
+                // Two exports written in the same clock tick would otherwise
+                // be ordered by whatever the filesystem happened to return,
+                // so the agent could send a different one each run with
+                // nothing having changed. The name settles it.
+                .ThenByDescending(f => f.Name, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
         }
         catch (Exception)
@@ -37,6 +42,19 @@ public static class ExportPicker
             return null;
         }
     }
+
+    /// <summary>
+    /// What makes one version of an export distinct: its name, the moment it
+    /// was last written, and its length.
+    ///
+    /// Used to tell a genuinely new reading from the same file sitting there
+    /// untouched. Name alone is not enough — an export that overwrites
+    /// "readings.csv" every time keeps the name and changes everything else —
+    /// and the write time alone is not either, because a file can be rewritten
+    /// within the same second.
+    /// </summary>
+    public static string Fingerprint(FileInfo file) =>
+        $"{file.Name}|{file.LastWriteTimeUtc.Ticks}|{file.Length}";
 
     /// <summary>Everything sendable in the folder, newest first, for the local pane.</summary>
     public static IReadOnlyList<FileInfo> List(string folder)
@@ -49,6 +67,7 @@ public static class ExportPicker
             return directory.EnumerateFiles()
                 .Where(f => AqiCsv.IsAccepted(f.Name))
                 .OrderByDescending(f => f.LastWriteTimeUtc)
+                .ThenByDescending(f => f.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
         catch (Exception)

@@ -124,6 +124,35 @@ Press **Connect**. Then either **Send now** for a one-off, pick a file and use
 **Send selected →** (or double-click it), or press **Start automatic sending** to
 run on the schedule chosen at install.
 
+### Which file gets sent
+
+The architect names a **folder**, not a file, so on every automatic run the
+agent decides for itself which export is the reading. It takes the **most
+recently modified `.csv`** in that folder — nothing else is consulted, not the
+name, not alphabetical order, not how new the name looks. A folder with a
+month of exports in it sends today's; an export that overwrites the same
+`readings.csv` every time works exactly as well.
+
+Two files written in the same clock tick are settled by name, so the choice is
+the same on every run rather than whatever the filesystem happened to return.
+
+The local pane lists the same order, newest at the top — so whatever sits at
+the top of it is what an unattended run would send.
+
+**An unchanged file is not sent twice.** If the monitoring software has not
+written since the last accepted send, the newest file is the one already
+delivered, and sending it again would file the same readings under a fresh
+timestamp — which CIDCO cannot tell from genuinely new data. The run says so
+and waits:
+
+```
+readings.csv has not changed since it was last sent — nothing new to send.
+The next reading goes as soon as it is written.
+```
+
+**Send now** always sends, unchanged or not: a person pressing the button means
+it.
+
 ### What gets sent, and under what name
 
 The local export keeps its own name. The copy that goes over the wire is always

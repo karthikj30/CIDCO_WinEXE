@@ -236,6 +236,20 @@ be unsaveable for anyone who downloaded it.
 Officers browse that tree under **Data** in `/cidco/sftp`, with the company's master row and each
 file's `fileStatus`. Trigger polls manually with `POST /api/admin/sftp/poll`.
 
+#### Files, or readings
+
+The **Data** panel has two views. *Files* is the folder tree as delivered, with
+each file's ten-step status. *Readings table* is what is inside those files:
+one row per reading, every AQI parameter as a column, and a **Missing
+parameters** column naming what that row does not carry.
+
+It reads from the parsed sheet rather than from the stored readings, so rows
+CIDCO rejected are in it too — a reading thrown away for a missing AQI value is
+exactly the one an officer needs to see, and a table built only from what was
+stored would quietly hide it. A missing **required** parameter (AQI Value, Date
+& Time) is marked in red and the row is tinted, because that row was never
+stored; anything else missing is amber and was stored as null.
+
 #### Reading `fileStatus`
 
 It always lists **all ten steps**, whatever happened. A run stops at the first
