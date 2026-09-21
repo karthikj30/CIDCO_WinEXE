@@ -84,7 +84,10 @@ public class LiveServerTests
         Assert.True(result.Ok, result.Message);
         // readings.csv on disk, companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv on the wire.
         AssertAqiName(result.FileName, Company);
-        Assert.Equal($"/{Company}/{RegisteredPath.TrimStart('/')}/{result.FileName}", result.Remote);
+        // The company and the file, and nothing else. The folder the export
+        // was taken from is a fact about this PC and stays on it.
+        Assert.Equal($"/{Company}/{result.FileName}", result.Remote);
+        Assert.DoesNotContain(RegisteredPath.TrimStart('/'), result.Remote);
         Assert.True(result.SizeBytes > 0);
     }
 

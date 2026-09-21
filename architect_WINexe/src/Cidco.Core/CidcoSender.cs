@@ -384,7 +384,7 @@ public sealed class CidcoSender : ICidcoTransport
         var remoteName = RemotePath.AqiFileName(CompanyId, sentAt);
         var target = IsPlainSftp
             ? RemotePath.IntoFolder(RemoteDirectory, CompanyId, sentAt)
-            : RemotePath.For(CompanyId, CsvFolder, remoteName);
+            : RemotePath.For(CompanyId, remoteName);
         var parent = RemotePath.ParentOf(target);
 
         SftpClient client;
@@ -411,9 +411,7 @@ public sealed class CidcoSender : ICidcoTransport
                 // Never create it — CIDCO's poll1 owns the folder tree.
                 if (!client.Exists(parent))
                 {
-                    return SendResult.Failed(
-                        $"Path does not exist: {parent}. The agent will not create folders on the server.",
-                        TransferOutcome.RefusedByCidco)
+                    return SendResult.Failed(MissingFolder(parent), TransferOutcome.RefusedByCidco)
                         with { FileName = remoteName, Remote = target };
                 }
 
@@ -461,6 +459,33 @@ public sealed class CidcoSender : ICidcoTransport
             Outcome = result.Outcome,
         });
         return result;
+    }
+
+    /// <summary>
+    /// The destination folder is not there, and the agent will not make it.
+    ///
+    /// Which of two mistakes this is depends on whether a folder was named in
+    /// the address, and the difference matters: on CIDCO's intake the folder
+    /// is theirs to create and there is nothing the architect can do, while on
+    /// an ordinary server it means the address is missing the destination and
+    /// the fix is one line in the box above. Saying only "path does not exist"
+    /// leaves the architect staring at a path they never typed.
+    /// </summary>
+    private string MissingFolder(string parent)
+    {
+        if (IsPlainSftp)
+        {
+            return $"Path does not exist on {Host}:{Port}: {parent}. The agent will not create " +
+                   $"folders on the server, so create it there — or point the address at a folder " +
+                   $"that already exists — and make sure {Username} may write to it.";
+        }
+
+        // No folder was named, so this is CIDCO's own layout.
+        return $"Path does not exist: {parent}. The agent will not create folders on the server. " +
+               "That path is CIDCO's layout, used because the address names no folder. If this is " +
+               $"your own server rather than CIDCO's intake, put the destination folder in the " +
+               $"address \u2014 for example {Host}:{Port}/home/ubuntu/uploads \u2014 and the file goes " +
+               "straight there instead.";
     }
 
     /// <summary>

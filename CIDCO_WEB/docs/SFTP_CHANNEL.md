@@ -290,8 +290,8 @@ That login says *an architect is calling*. It does not say **which** one — tha
 company id at the front of the upload path:
 
 ```
-/<companyId>/<the folder the CSV was taken from>/<file>.csv
-/ABCD123/C:/CIDCO/exports/readings.csv
+/<companyId>/<file>.csv
+/ABCD123/ABCD123_21_09_2026_11-30-24_AQI.csv
 ```
 
 The server reads the company id when the file is opened and looks it up in the master table. An

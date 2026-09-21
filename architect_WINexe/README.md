@@ -238,6 +238,23 @@ box is then the key's passphrase if it has one — leave it empty if it does not
 Only the path is remembered; the key stays where it is and the passphrase is
 never written down.
 
+### Sending to your own server, not CIDCO's
+
+**Name the destination folder in the address.** Without one the agent uses
+CIDCO's own layout, `/<companyId>/<file>`, which exists on CIDCO's intake and
+on no other machine — so every send is refused for a folder you never asked
+anyone to create:
+
+```
+13.127.203.85:22                     ✗  tries /ABCD123/… — CIDCO's layout
+13.127.203.85:22/home/ubuntu/uploads ✓  drops the file straight in there
+```
+
+The **File path** box is where your CSVs are read *from* on this PC. It has
+nothing to do with where they land on the server, and it never travels with
+them — a local path like `\\192.168.1.100\common\karthik` means nothing to a
+Linux box.
+
 ### Where the file lands on your own server
 
 Name a base folder in the address and the agent drops the renamed file straight

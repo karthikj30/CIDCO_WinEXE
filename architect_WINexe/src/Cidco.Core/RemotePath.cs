@@ -62,16 +62,30 @@ public static class RemotePath
         at.ToString("HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// "C:/CIDCO/exports" + renamed file becomes
-    /// "/ABCD123/C:/CIDCO/exports/ABCD123_21_09_2026_11-30-24_AQI.csv".
+    /// Where CIDCO's own intake takes the file:
+    ///
+    ///     /ABCD123/ABCD123_21_09_2026_11-30-24_AQI.csv
+    ///
+    /// The company id, then the renamed file. Nothing else.
+    ///
+    /// It used to carry the folder the CSV was taken from as well, because the
+    /// intake read the company and the source path out of the upload path. It
+    /// does not any more — the file name carries the company and the moment,
+    /// and poll1 builds the tree from that — so the source folder was doing no
+    /// work and was actively harmful: an architect exporting to a network
+    /// share sent
+    ///
+    ///     /ABCD123/192.168.1.100/common/karthik/…
+    ///
+    /// which is a path on nobody's server. A local folder is a fact about the
+    /// architect's PC and has no business in a remote path.
     /// </summary>
-    public static string For(string companyId, string csvFolder, string fileName)
+    public static string For(string companyId, string fileName)
     {
         var company = companyId.Trim().Trim('/');
-        var source = Normalise(csvFolder).TrimStart('/');
         var name = FileNameOnly(fileName);
 
-        var parts = new[] { company, source, name }.Where(p => p.Length > 0);
+        var parts = new[] { company, name }.Where(p => p.Length > 0);
         return "/" + string.Join("/", parts);
     }
 

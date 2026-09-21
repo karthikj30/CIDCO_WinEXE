@@ -38,11 +38,10 @@ public class AqiFileNameTests
             RemotePath.IntoFolder("/home/ubuntu/SFTP", "ABCD123", Noon));
 
     [Fact]
-    public void CIDCO_intake_gets_the_renamed_file_under_company_and_source() =>
+    public void CIDCO_intake_gets_the_renamed_file_under_the_company() =>
         Assert.Equal(
-            "/ABCD123/C:/CIDCO/exports/ABCD123_19_09_2026_13-28-49_AQI.csv",
-            RemotePath.For("ABCD123", "C:/CIDCO/exports",
-                RemotePath.AqiFileName("ABCD123", Noon)));
+            "/ABCD123/ABCD123_19_09_2026_13-28-49_AQI.csv",
+            RemotePath.For("ABCD123", RemotePath.AqiFileName("ABCD123", Noon)));
 
     [Fact]
     public void Parent_of_a_file_is_its_folder() =>

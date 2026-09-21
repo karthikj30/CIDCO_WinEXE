@@ -91,10 +91,10 @@ public class PlainSftpAddressTests
     [Fact]
     public void It_is_nothing_like_the_CIDCO_layout()
     {
-        // The two must not be confusable: CIDCO's carries the company and the
-        // source folder, a plain upload carries neither.
+        // The two must not be confusable: CIDCO's is scoped to the company, a
+        // plain upload goes into the folder the architect named and nowhere else.
         var plain = RemotePath.Join("/home/ubuntu/uploads", "readings.csv");
-        var cidco = RemotePath.For("ABCD123", "C:/CIDCO/exports", "readings.csv");
+        var cidco = RemotePath.For("ABCD123", "readings.csv");
 
         Assert.DoesNotContain("ABCD123", plain);
         Assert.Contains("ABCD123", cidco);

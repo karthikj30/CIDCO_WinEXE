@@ -195,13 +195,16 @@ It signs in with **one shared SFTP login** (`SFTP_SHARED_USER` / `SFTP_SHARED_PA
 `cidco@example.com` / `123456`) and names its company in the upload path:
 
 ```
-/<companyId>/<the folder the CSV was taken from>/<file>.csv
-/ABCD123/C:/CIDCO/exports/readings.csv
+/<companyId>/<file>.csv
+/ABCD123/ABCD123_21_09_2026_11-30-24_AQI.csv
 ```
 
 The shared login proves the sender is an architect; it does not say *which* architect. That comes
-from the company id in the path, and it is checked against the master record — along with the source
-IP and the declared file path — on every single transfer, exactly as for a per-company account. An
+from the company id in the path, and it is checked against the master record on every transfer. The
+path used to carry the folder the CSV was taken from as well; it no longer does, because the file
+name carries the company and the moment and poll1 builds the tree from that — and a local folder,
+especially a network share like `\\192.168.1.100\common\karthik`, is a fact about the architect's PC
+that has no meaning on a server. An
 unregistered or deactivated company id is refused at the door.
 
 ### The master and data tables

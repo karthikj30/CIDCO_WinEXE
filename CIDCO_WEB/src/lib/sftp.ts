@@ -780,16 +780,21 @@ export function parseAgentPath(remotePath: string): { companyId: string; declare
  * The remote path the agent writes to, built in one place so the server and
  * the Windows agent cannot disagree about it:
  *
- *   /<companyId>/<the path the CSV was taken from>/<file>
+ *   /<companyId>/<file>
  *
- * A Windows source path keeps its drive letter — "C:/CIDCO/exports" becomes
- * "/ABCD123/C:/CIDCO/exports/readings.csv".
+ * e.g. "/ABCD123/ABCD123_21_09_2026_11-30-24_AQI.csv".
+ *
+ * It used to carry the folder the CSV was taken from as well, back when the
+ * intake read the company and the source path out of the upload path. The file
+ * name carries the company and the moment now, and poll1 builds the tree from
+ * that, so the source folder did no work — and on an architect exporting from
+ * a network share it produced "/ABCD123/192.168.1.100/common/karthik/…", a
+ * path on nobody's server. `parseAgentPath` still reads either shape.
  */
-export function agentRemotePath(companyId: string, filePath: string, fileName: string) {
+export function agentRemotePath(companyId: string, fileName: string) {
   const company = companyId.trim().replace(/^\/+|\/+$/g, '');
-  const source = normalisePath(filePath).replace(/^\/+/, '');
   const name = path.posix.basename(fileName);
-  return `/${[company, source, name].filter(Boolean).join('/')}`;
+  return `/${[company, name].filter(Boolean).join('/')}`;
 }
 
 /**
