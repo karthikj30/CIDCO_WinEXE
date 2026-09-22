@@ -8,24 +8,27 @@ import { normalisePath } from '@/lib/sftp';
 export const dynamic = 'force-dynamic';
 
 const companySchema = z.object({
-  companyId: z
+  siteName: z
     .string()
-    .min(2, 'Company id is required')
-    .max(60)
-    .regex(/^[A-Za-z0-9._/-]+$/, 'Company id may use letters, digits, dot, dash, slash and underscore'),
-  companyName: z.string().min(2, 'Company name is required').max(160),
-  // Optional. It used to gate transfers — a file arriving from any other
-  // address was refused — and it no longer does: the company and the moment
-  // travel in the file name and poll1 files by those. Leaving it required only
-  // stopped a company being registered at all, which is worse than not
-  // knowing the address. Kept because it is still worth recording.
-  architectServerIp: z.string().max(64).optional().default(''),
-  /// Optional — when blank, poll1 still accepts files and builds the tree.
-  filePath: z.string().max(400).optional().default(''),
+    .min(2, 'Site name is required')
+    .max(120)
+    // It travels in a file name and becomes a folder, so it has to survive
+    // both: no slashes, no colons, nothing a path separator could eat.
+    .regex(
+      /^[A-Za-z0-9 ._-]+$/,
+      'Site name may use letters, digits, spaces, dot, dash and underscore',
+    ),
+  /** Where the agent delivers to. Optional; poll1 files by the name anyway. */
+  designatedPath: z.string().max(400).optional().default(''),
   publicKey: z.string().max(4000).optional(),
   privateKey: z.string().max(4000).optional(),
   userId: z.string().max(160).optional(),
-  architectEmail: z.string().email().optional(),
+  mobile: z.string().max(40).optional(),
+  email: z.string().email('A valid email is required').optional().or(z.literal('')),
+  address: z.string().max(400).optional(),
+  architectName: z.string().max(160).optional(),
+  departmentId: z.string().optional().or(z.literal('')),
+  nodeId: z.string().optional().or(z.literal('')),
   notes: z.string().max(300).optional(),
 });
 
@@ -54,20 +57,25 @@ export async function GET(req: NextRequest) {
             _count: { select: { sftpUploads: true } },
           },
         },
+        department: true,
+        node: true,
       },
     });
 
     return ok({
       companies: companies.map((c) => ({
         id: c.id,
-        companyId: c.companyId,
-        companyName: c.companyName,
-        architectServerIp: c.architectServerIp,
-        filePath: c.filePath,
+        siteName: c.siteName,
+        designatedPath: c.designatedPath,
         publicKey: c.publicKey,
         privateKey: c.privateKey ? '••••••••' : null,
         userId: c.userId,
-        contactEmail: c.contactEmail,
+        mobile: c.mobile,
+        email: c.email,
+        address: c.address,
+        architectName: c.architectName,
+        department: c.department ? { id: c.department.id, name: c.department.name } : null,
+        node: c.node ? { id: c.node.id, name: c.node.name } : null,
         notes: c.notes,
         active: c.active,
         createdAt: c.createdAt,
@@ -100,23 +108,26 @@ export async function POST(req: NextRequest) {
 
     const data = companySchema.parse(await req.json());
 
-    const existing = await prisma.company.findUnique({ where: { companyId: data.companyId } });
-    if (existing) return fail(`Company id "${data.companyId}" is already registered`, 409);
+    const existing = await prisma.company.findUnique({ where: { siteName: data.siteName } });
+    if (existing) return fail(`Company id "${data.siteName}" is already registered`, 409);
 
     const company = await prisma.company.create({
       data: {
-        companyId: data.companyId.trim(),
-        companyName: data.companyName.trim(),
+        siteName: data.siteName.trim(),
         // Stored normalised so a trailing slash or an IPv6-mapped form cannot
         // make a legitimate transfer fail validation later.
-        architectServerIp: (data.architectServerIp),
-        filePath: normalisePath(data.filePath || ''),
+        designatedPath: normalisePath(data.designatedPath || ''),
         publicKey: data.publicKey?.trim() || null,
         privateKey: data.privateKey?.trim() || null,
         userId: data.userId?.trim() || null,
+        mobile: data.mobile?.trim() || null,
+        address: data.address?.trim() || null,
+        architectName: data.architectName?.trim() || null,
+        departmentId: data.departmentId || null,
+        nodeId: data.nodeId || null,
         // Contact detail only — architects sign in with the shared CIDCO login,
         // so no account is created here.
-        contactEmail: data.architectEmail?.trim().toLowerCase() ?? null,
+        email: data.email?.trim().toLowerCase() || null,
         notes: data.notes ?? null,
         createdById: guard.user.id,
       },

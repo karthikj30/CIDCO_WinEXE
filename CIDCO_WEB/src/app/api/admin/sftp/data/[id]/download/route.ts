@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       candidates.push(path.resolve(process.env.CIDCO_INBOX_DIR || './storage/inbox', path.basename(file.relativePath)));
     } else {
       candidates.push(path.resolve(dataRoot(), file.relativePath));
-      candidates.push(path.resolve(archiveRoot(), file.companyId, file.fileName));
+      candidates.push(path.resolve(archiveRoot(), file.siteName, file.fileName));
     }
 
     let body: Buffer | null = null;

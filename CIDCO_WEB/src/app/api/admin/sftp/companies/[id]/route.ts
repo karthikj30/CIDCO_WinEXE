@@ -7,14 +7,33 @@ import { normalisePath } from '@/lib/sftp';
 
 export const dynamic = 'force-dynamic';
 
+/** Every master field is editable; anything left out is left alone. */
+const text = (max: number) => z.string().max(max).nullable().optional();
+
 const patchSchema = z.object({
-  companyName: z.string().min(2).max(160).optional(),
-  architectServerIp: z.string().min(3).max(64).optional(),
-  filePath: z.string().min(1).max(400).optional(),
-  notes: z.string().max(300).nullable().optional(),
+  siteName: z
+    .string()
+    .min(2)
+    .max(120)
+    .regex(/^[A-Za-z0-9 ._-]+$/, 'Site name may use letters, digits, spaces, dot, dash and underscore')
+    .optional(),
+  designatedPath: z.string().max(400).nullable().optional(),
+  userId: text(160),
+  publicKey: text(4000),
+  privateKey: text(8000),
+  mobile: text(40),
+  email: z.union([z.string().email(), z.literal('')]).nullable().optional(),
+  address: text(400),
+  architectName: text(160),
+  departmentId: text(40),
+  nodeId: text(40),
+  notes: text(300),
   active: z.boolean().optional(),
-  architectEmail: z.string().email().nullable().optional(),
 });
+
+/** '' from a cleared form field means "unset", not "store an empty string". */
+const blank = (v: string | null | undefined) =>
+  v === undefined ? undefined : v === null || v.trim() === '' ? null : v.trim();
 
 /**
  * PATCH /api/admin/sftp/companies/:id
@@ -36,22 +55,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const updated = await prisma.company.update({
       where: { id },
       data: {
-        companyName: body.companyName ?? undefined,
-        architectServerIp: body.architectServerIp ? (body.architectServerIp) : undefined,
-        filePath: body.filePath ? normalisePath(body.filePath) : undefined,
-        notes: body.notes === undefined ? undefined : body.notes,
-        active: body.active ?? undefined,
-        // Contact detail only; null clears it.
-        contactEmail:
-          body.architectEmail === undefined
+        siteName: body.siteName?.trim() ?? undefined,
+        // The path is stored normalised so poll1 compares like with like.
+        designatedPath:
+          body.designatedPath === undefined
             ? undefined
-            : body.architectEmail === null
-              ? null
-              : body.architectEmail.trim().toLowerCase(),
+            : body.designatedPath && body.designatedPath.trim()
+              ? normalisePath(body.designatedPath)
+              : '',
+        userId: blank(body.userId),
+        publicKey: blank(body.publicKey),
+        privateKey: blank(body.privateKey),
+        mobile: blank(body.mobile),
+        email: blank(body.email)?.toLowerCase() ?? (body.email === undefined ? undefined : null),
+        address: blank(body.address),
+        architectName: blank(body.architectName),
+        departmentId: blank(body.departmentId),
+        nodeId: blank(body.nodeId),
+        notes: blank(body.notes),
+        active: body.active ?? undefined,
       },
+      include: { department: true, node: true },
     });
 
-    return ok({ message: 'Registration updated. It applies to the next transfer.', company: updated });
+    return ok({
+      message: 'Registration updated. It applies to the next transfer.',
+      // Never hand a stored private key back to a browser.
+      company: { ...updated, privateKey: updated.privateKey ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : null },
+    });
   } catch (error) {
     return handleError(error);
   }

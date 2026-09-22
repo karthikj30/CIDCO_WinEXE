@@ -7,7 +7,7 @@ import { AQI_PARAMETERS, readingsOf } from '@/lib/aqiRows';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/admin/sftp/analytics?companyId=ABCD123
+ * GET /api/admin/sftp/analytics?siteName=ABCD123
  *
  * What one company's deliveries look like, for the charts: the headline
  * numbers, deliveries per day, and the AQI the readings actually carried.
@@ -23,11 +23,11 @@ export async function GET(req: NextRequest) {
     if ('error' in guard) return guard.error;
 
     const url = new URL(req.url);
-    const companyId = url.searchParams.get('companyId');
-    if (!companyId) return ok({ companyId: null, series: [], deliveries: [], totals: null, log: [] });
+    const siteName = url.searchParams.get('siteName');
+    if (!siteName) return ok({ siteName: null, series: [], deliveries: [], totals: null, log: [] });
 
     const files = await prisma.dataFile.findMany({
-      where: { companyId },
+      where: { siteName },
       orderBy: { receivedAt: 'desc' },
       take: 300,
     });
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
     };
 
     return ok({
-      companyId,
+      siteName,
       totals,
       deliveries,
       // A line with thousands of points is a smear; this keeps the shape.

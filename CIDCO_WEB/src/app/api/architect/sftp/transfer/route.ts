@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const password = String(form.get('password') ?? '');
     const designatedIp = String(form.get('designatedIp') ?? '').trim();
     const declaredPath = String(form.get('filePath') ?? '').trim();
-    const declaredCompanyId = String(form.get('companyId') ?? '').trim();
+    const declaredCompanyId = String(form.get('siteName') ?? '').trim();
     const file = form.get('file');
 
     if (!username || !password) return fail('Enter the user id and password CIDCO sent you', 422);
@@ -50,13 +50,13 @@ export async function POST(req: NextRequest) {
         return fail('The shared CIDCO login is not configured on this server', 503);
       }
 
-      const fromName = parseAqiFileName(file.name)?.companyId;
-      const companyId = declaredCompanyId || fromName;
-      if (!companyId) {
+      const fromName = parseAqiFileName(file.name)?.siteName;
+      const siteName = declaredCompanyId || fromName;
+      if (!siteName) {
         return fail('Send your company id alongside the file when using the shared CIDCO login', 422);
       }
 
-      const named = await prisma.company.findUnique({ where: { companyId } });
+      const named = await prisma.company.findUnique({ where: { siteName } });
       // Missing registration is fine — poll1 will auto-create from the filename.
       handshake = { ...carrier, company: named };
     } else {
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     }
 
     const company = handshake.company;
-    const presentedPath = normalisePath(declaredPath || company?.filePath || '');
+    const presentedPath = normalisePath(declaredPath || company?.designatedPath || '');
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const queued = await enqueueInboxFile({

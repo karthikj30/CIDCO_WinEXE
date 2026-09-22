@@ -49,7 +49,7 @@ export type AqiReadingRow = {
   fileName: string;
   /** The flat name the agent delivered it under. */
   deliveredName: string | null;
-  companyId: string;
+  siteName: string;
   dateFolder: string;
   /** 1-based row number in the sheet, counting the header as row 1. */
   sheetRow: number;
@@ -110,7 +110,7 @@ export function readingsOf(file: DataFile): AqiReadingRow[] {
       fileId: file.id,
       fileName: file.fileName,
       deliveredName: file.deliveredName,
-      companyId: file.companyId,
+      siteName: file.siteName,
       dateFolder: file.dateFolder,
       // +2: sheet rows are 1-based and row 1 is the header — the same
       // numbering the ingestion service uses when it names a rejected row.

@@ -383,30 +383,61 @@ enum TransferMode {
   PORTAL // dragged and dropped in the architect portal, relayed over SFTP
 }
 
-/// A company CIDCO registers by hand before any credentials are issued.
+/// A CIDCO node — the area a site sits in (Kharghar, Taloja, …).
 ///
-/// This record is the reference every later transfer is checked against: the
-/// company id the architect presents, the address the data arrives from, and
-/// the file path it is taken from all have to match what CIDCO entered here.
+/// Its own table rather than a string on the company, so the list is
+/// consistent between sites and an officer can add one without a deploy.
+model Node {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  companies Company[]
+
+  @@map("nodes")
+}
+
+/// A CIDCO department — Planning (NAINA), Planning (Navi Mumbai), Engineering.
+model Department {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  companies Company[]
+
+  @@map("departments")
+}
+
+/// The MASTER table: one monitoring site CIDCO holds details for.
+///
+/// `siteName` is the identifier, not a separate code. It is what the agent
+/// puts in every file name and what poll1 files by, so it has to be unique and
+/// has to survive a round trip through a file name — see `safeSiteName`.
+///
+/// Registering is optional: poll1 creates a row from the name in the first
+/// file that arrives. Registering adds everything else.
 model Company {
   id                String   @id @default(cuid())
-  /// CIDCO-assigned identifier for the company, quoted on every transfer.
-  companyId         String   @unique
-  companyName       String
-  /// The architect's own server address — data is only accepted from here.
-  architectServerIp String
-  /// Where the architect's CSV is picked up from, and written to on CIDCO.
-  /// Optional: when blank, poll1 still accepts the file and builds the tree.
-  filePath          String   @default("")
-  /// Master-table credentials CIDCO issues for the company channel.
+  /// The site, e.g. "Kharghar Sector 12". Unique, and quoted on every transfer.
+  siteName          String   @unique
+  /// Master-table credentials CIDCO issues for this site.
   publicKey         String?
   privateKey        String?
-  /// Portal / SFTP user id tied to this company (master table).
+  /// Portal / SFTP user id tied to this site.
   userId            String?
-  /// The architect's contact email, exactly as CIDCO typed it. Stored as
-  /// data — architects sign in with the shared CIDCO portal login, so no
-  /// account is created for it.
-  contactEmail      String?
+  /// The designated path the architect's agent delivers to.
+  designatedPath    String   @default("")
+  mobile            String?
+  email             String?
+  address           String?
+  /// The architect responsible for the site.
+  architectName     String?
+
+  departmentId      String?
+  nodeId            String?
+
   /// Optional link to a portal user, kept for registrations made before the
   /// shared login existed. Nothing requires it.
   architectId       String?
@@ -417,12 +448,16 @@ model Company {
   updatedAt         DateTime @updatedAt
 
   architect  User?                @relation("CompanyArchitect", fields: [architectId], references: [id], onDelete: SetNull)
+  department Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  node       Node?                @relation(fields: [nodeId], references: [id], onDelete: SetNull)
   handshakes ArchitectHandshake[]
   reports    Report[]
   dataFiles  DataFile[]
 
   @@index([architectId])
   @@index([userId])
+  @@index([departmentId])
+  @@index([nodeId])
   @@map("companies")
 }
 
@@ -440,10 +475,10 @@ model SftpUpload {
 
   // --- CIDCO-side validation, run on every single transfer -----------------
   // What the transfer presented…
-  presentedCompanyId String?
+  presentedSiteName  String?
   presentedPath      String?
   // …and whether each matched the company record CIDCO registered beforehand.
-  companyIdMatch     Boolean @default(false)
+  siteNameMatch      Boolean @default(false)
   pathMatch          Boolean @default(false)
   validationPassed   Boolean @default(false)
   rejectionReason    String?
@@ -477,24 +512,24 @@ enum DataFilePollStatus {
 /// The DATA table.
 ///
 /// Every CSV CIDCO accepts is filed on disk under
-/// `<companyId>/<month>/<date>/<timestamp>/<file>.csv`, and this row is the
+/// `<siteName>/<dd_mm_yyyy>/<hh-mm-ss>.csv`, and this row is the
 /// index of that tree: which company delivered it, which folders it landed in,
 /// the AQI payload, and the AQI SFTP Ingestion Service file status.
-/// `companies` is the matching MASTER table (companyId, publicKey, privateKey, userId).
+/// `companies` is the matching MASTER table (siteName, publicKey, privateKey, userId).
 model DataFile {
   id              String            @id @default(cuid())
   companyRecordId String
   /// Denormalised so the folder tree can be read without a join.
-  companyId       String
+  siteName        String
   /// e.g. "2026-09-September"
   monthFolder     String
   /// e.g. "2026-09-18"
   dateFolder      String            @default("pending")
   /// e.g. "2026-09-18_11-30-05"
   timestampFolder String
-  /// Timestamp parsed from the filename (companyId_timestamp_AQI.csv).
+  /// Timestamp parsed from the filename (siteName_timestamp_AQI.csv).
   timestamp       String?
-  /// Path under the data root: <companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv
+  /// Path under the data root: <siteName>/<dd_mm_yyyy>/<hh-mm-ss>.csv
   relativePath    String
   /// The name in the tree — the delivery time, e.g. "11-30-24.csv".
   fileName        String
@@ -516,7 +551,7 @@ model DataFile {
   company Company @relation(fields: [companyRecordId], references: [id], onDelete: Cascade)
 
   @@index([companyRecordId])
-  @@index([companyId])
+  @@index([siteName])
   @@index([monthFolder])
   @@index([pollStatus])
   @@map("data_files")

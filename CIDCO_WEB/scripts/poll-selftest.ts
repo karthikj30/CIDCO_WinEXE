@@ -122,14 +122,14 @@ async function main() {
 
   for (const row of filed) {
     const parsed = parseAqiFileName(row.deliveredName!)!;
-    const expected = `${row.companyId}/${parsed.dateFolder}/${parsed.timeStem}.csv`;
-    check(`  ${row.deliveredName} filed as companyId/dd_mm_yyyy/hh-mm-ss.csv`,
+    const expected = `${row.siteName}/${parsed.dateFolder}/${parsed.timeStem}.csv`;
+    check(`  ${row.deliveredName} filed as siteName/dd_mm_yyyy/hh-mm-ss.csv`,
       row.relativePath === expected, row.relativePath);
     check(`  ${row.relativePath} is on disk`, await exists(path.join(dataRoot(), row.relativePath)));
     check(`  ${row.relativePath} has no colon in it`, !row.relativePath.includes(':'));
   }
 
-  const auto = await prisma.company.findUnique({ where: { companyId: 'NEWCO777' } });
+  const auto = await prisma.company.findUnique({ where: { siteName: 'NEWCO777' } });
   check('poll1 registers a company it has never seen', Boolean(auto));
 
   // --- poll2 -------------------------------------------------------------
@@ -171,8 +171,8 @@ async function main() {
   for (const row of archived) {
     // The date folder comes along, or every day's 11-30-24.csv would collide.
     check(`  ${row.relativePath} archived under its date`,
-      await exists(path.join(archiveRoot(), row.companyId, row.dateFolder, row.fileName)));
-    const stillFiled = path.join(dataRoot(), row.companyId, row.dateFolder, row.fileName);
+      await exists(path.join(archiveRoot(), row.siteName, row.dateFolder, row.fileName)));
+    const stillFiled = path.join(dataRoot(), row.siteName, row.dateFolder, row.fileName);
     check(`  ${row.fileName} left the data tree`, !(await exists(stillFiled)));
   }
 

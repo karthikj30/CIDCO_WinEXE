@@ -61,14 +61,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         validation: {
           passed: upload.validationPassed,
           reason: upload.rejectionReason,
-          companyId: {
-            presented: upload.presentedCompanyId,
-            expected: upload.handshake.company?.companyId ?? null,
-            match: upload.companyIdMatch,
+          siteName: {
+            presented: upload.presentedSiteName,
+            expected: upload.handshake.company?.siteName ?? null,
+            match: upload.siteNameMatch,
           },
-          filePath: {
+          designatedPath: {
             presented: upload.presentedPath,
-            expected: upload.handshake.company?.filePath ?? null,
+            expected: upload.handshake.company?.designatedPath ?? null,
             match: upload.pathMatch,
           },
         },

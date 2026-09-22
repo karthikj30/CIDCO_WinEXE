@@ -106,20 +106,18 @@ async function main() {
 
   const archEmail = `sftp-arch-${stamp}@studio.in`;
 
-  const companyId = `CIDCO-CO-${stamp}`;
+  const siteName = `CIDCO-CO-${stamp}`;
   const registered = await api('/api/admin/sftp/companies', {
     method: 'POST',
     body: JSON.stringify({
-      companyName: 'Nair Design Studio',
-      companyId,
-      architectServerIp: ARCHITECT_IP,
-      filePath: FILE_PATH,
+      siteName,
+      designatedPath: FILE_PATH,
       architectEmail: archEmail,
     }),
   });
   check(registered.status === 201, `company registered (got ${registered.status})`);
   check(registered.json?.data?.company?.filePath === FILE_PATH, 'the file path is stored on the registration');
-  check(registered.json?.data?.company?.contactEmail === archEmail, 'the architect email is stored as contact detail');
+  check(registered.json?.data?.company?.email === archEmail, 'the architect email is stored as contact detail');
   check(
     (await prisma.user.findUnique({ where: { email: archEmail } })) === null,
     'registering did NOT create an account for that email',
@@ -128,19 +126,19 @@ async function main() {
   // Credentials cannot exist without a registration.
   const orphan = await api('/api/admin/sftp/accounts', {
     method: 'POST',
-    body: JSON.stringify({ companyId: 'NOT-REGISTERED' }),
+    body: JSON.stringify({ siteName: 'NOT-REGISTERED' }),
   });
   check(orphan.status === 404, 'credentials cannot be issued for an unregistered company');
 
   console.log('== 1. CIDCO emails the user id, password and designated IP ==');
   const issued = await api('/api/admin/sftp/accounts', {
     method: 'POST',
-    body: JSON.stringify({ companyId }),
+    body: JSON.stringify({ siteName }),
   });
   check(issued.status === 201, `credentials issued (got ${issued.status})`);
   const cred = issued.json.data.credential;
   check(
-    ['username', 'password', 'designatedIp', 'companyId', 'filePath'].every((k) => k in cred),
+    ['username', 'password', 'designatedIp', 'siteName', 'filePath'].every((k) => k in cred),
     'the emailed bundle carries the user id, password, designated IP, company id and file path',
   );
   console.log(`   ${cred.username} → ${cred.designatedIp}:${cred.port}${cred.filePath}`);
@@ -152,7 +150,7 @@ async function main() {
   check(!!conn, 'the registered credentials connect straight away — no separate approval step');
   if (!conn) throw new Error('cannot continue without a session');
 
-  const companyRow = await prisma.company.findUniqueOrThrow({ where: { companyId } });
+  const companyRow = await prisma.company.findUniqueOrThrow({ where: { siteName } });
   const before = await prisma.report.count({ where: { companyRecordId: companyRow.id } });
 
   await put(conn, `${FILE_PATH}/readings.csv`, csv(3));
@@ -161,17 +159,17 @@ async function main() {
 
   console.log('== validation on the CIDCO side ==');
   const list = await api('/api/admin/sftp/uploads');
-  const row = list.json.data.uploads.find((u: { presentedCompanyId: string | null }) => u.presentedCompanyId === companyId);
+  const row = list.json.data.uploads.find((u: { presentedSiteName: string | null }) => u.presentedSiteName === siteName);
   check(!!row, 'the transfer is on the CIDCO dashboard');
   check(row?.validationPassed === true, 'validation passed');
-  check(row?.companyIdMatch && row?.ipMatch && row?.pathMatch, 'company id, IP and file path all matched');
+  check(row?.siteNameMatch && row?.ipMatch && row?.pathMatch, 'company id, IP and file path all matched');
   check(row?.presentedPath === FILE_PATH, `the path it was taken from is recorded (${row?.presentedPath})`);
   check(row?.presentedIp === ARCHITECT_IP, `the address it came from is recorded (${row?.presentedIp})`);
   check(row?.importedCount === 3 && row?.rowCount === 4, `3 of 4 CSV rows stored (got ${row?.importedCount} of ${row?.rowCount})`);
 
   const detail = await api(`/api/admin/sftp/uploads/${row.id}`);
   const v = detail.json.data.upload.validation;
-  check(v.companyId.presented === companyId && v.companyId.expected === companyId, 'the officer sees company id, incoming vs registered');
+  check(v.siteName.presented === siteName && v.siteName.expected === siteName, 'the officer sees company id, incoming vs registered');
   check(v.ip.presented === ARCHITECT_IP && v.ip.expected === ARCHITECT_IP, 'the officer sees the IP, incoming vs registered');
   check(v.filePath.presented === FILE_PATH && v.filePath.expected === FILE_PATH, 'the officer sees the file path, incoming vs registered');
   check(detail.json.data.upload.rows.length === 4, 'the CSV is previewable row by row');
@@ -205,14 +203,14 @@ async function main() {
   });
   check(!!rejected, 'the mismatched transfer is recorded');
   check(rejected?.status === 'REJECTED', `it is marked REJECTED (got ${rejected?.status})`);
-  check(rejected?.pathMatch === false && rejected?.companyIdMatch === true, 'the file path is the field that failed');
+  check(rejected?.pathMatch === false && rejected?.siteNameMatch === true, 'the file path is the field that failed');
   check(!!rejected?.rejectionReason, `the reason is recorded (${rejected?.rejectionReason?.slice(0, 60)}…)`);
   check(afterBad === after, 'nothing was stored from the refused transfer');
 
   console.log('== the wrong source address is refused outright ==');
-  await prisma.company.update({ where: { companyId }, data: { architectServerIp: '203.0.113.99' } });
+  await prisma.company.update({ where: { siteName }, data: { } });
   check((await connect(cred.username, cred.password)) === null, 'a connection from an unregistered address is refused');
-  await prisma.company.update({ where: { companyId }, data: { architectServerIp: ARCHITECT_IP } });
+  await prisma.company.update({ where: { siteName }, data: { } });
 
   console.log('== the architect signs in with the shared CIDCO login and connects ==');
   cookie = '';
@@ -234,7 +232,7 @@ async function main() {
   });
   check(connected.status === 200, `connecting with the SFTP credentials works (got ${connected.status})`);
   const account = connected.json?.data?.account;
-  check(account?.company?.companyId === companyId, 'connecting identifies the right company');
+  check(account?.company?.siteName === siteName, 'connecting identifies the right company');
   check(account?.company?.filePath === FILE_PATH, 'the architect sees the registered file path');
   check(connected.json?.data?.endpoint?.designatedIp !== undefined, 'the architect sees the designated IP to send to');
   check(account?.uploads?.some((u: { validationPassed: boolean }) => u.validationPassed), 'the architect sees the accepted transfer');

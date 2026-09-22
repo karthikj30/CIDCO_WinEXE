@@ -42,9 +42,9 @@ export async function GET(req: NextRequest) {
             errors: true,
             receivedAt: true,
             parsedAt: true,
-            presentedCompanyId: true,
+            presentedSiteName: true,
             presentedPath: true,
-            companyIdMatch: true,
+            siteNameMatch: true,
             pathMatch: true,
             validationPassed: true,
             rejectionReason: true,
@@ -65,10 +65,8 @@ export async function GET(req: NextRequest) {
         // What CIDCO registered — and therefore what each transfer must match.
         company: a.company
           ? {
-              companyId: a.company.companyId,
-              companyName: a.company.companyName,
-              architectServerIp: a.company.architectServerIp,
-              filePath: a.company.filePath,
+              siteName: a.company.siteName,
+              designatedPath: a.company.designatedPath,
               active: a.company.active,
             }
           : null,

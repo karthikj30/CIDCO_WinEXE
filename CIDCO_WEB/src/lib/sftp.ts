@@ -275,16 +275,16 @@ export async function parseDataFile(buffer: Buffer, fileName: string): Promise<P
 
 /** What a transfer presented, to be checked against the company record. */
 export type PresentedTransfer = {
-  companyId: string | null;
+  siteName: string | null;
   filePath: string | null;
 };
 
 export type TransferValidation = {
-  companyIdMatch: boolean;
+  siteNameMatch: boolean;
   pathMatch: boolean;
   passed: boolean;
   reason: string | null;
-  expected: { companyId: string; filePath: string };
+  expected: { siteName: string; designatedPath: string };
   presented: PresentedTransfer;
 };
 
@@ -315,32 +315,32 @@ export function comparablePath(value: string | null | undefined) {
  * under company/month/date/timestamp from the filename alone.
  */
 export function validateTransfer(company: Company, presented: PresentedTransfer): TransferValidation {
-  const companyIdMatch = (presented.companyId ?? '').trim() === company.companyId;
-  const registeredPath = comparablePath(company.filePath);
+  const siteNameMatch = (presented.siteName ?? '').trim() === company.siteName;
+  const registeredPath = comparablePath(company.designatedPath);
   const presentedPath = comparablePath(presented.filePath);
   const pathMatch =
     registeredPath.length === 0 ||
     presentedPath.length === 0 ||
     presentedPath === registeredPath;
-  const passed = companyIdMatch && pathMatch && company.active;
+  const passed = siteNameMatch && pathMatch && company.active;
 
   const mismatches: string[] = [];
   if (!company.active) mismatches.push('the company registration is inactive');
-  if (!companyIdMatch) {
-    mismatches.push(`company id "${presented.companyId ?? '—'}" does not match the registered "${company.companyId}"`);
+  if (!siteNameMatch) {
+    mismatches.push(`site "${presented.siteName ?? '—'}" does not match the registered "${company.siteName}"`);
   }
   if (!pathMatch) {
-    mismatches.push(`file path "${presented.filePath ?? '—'}" is not the registered path "${company.filePath}"`);
+    mismatches.push(`file path "${presented.filePath ?? '—'}" is not the registered path "${company.designatedPath}"`);
   }
 
   return {
-    companyIdMatch,
+    siteNameMatch,
     pathMatch,
     passed,
     reason: passed ? null : mismatches.join('; '),
     expected: {
-      companyId: company.companyId,
-      filePath: company.filePath,
+      siteName: company.siteName,
+      designatedPath: company.designatedPath,
     },
     presented,
   };
@@ -541,7 +541,7 @@ export async function ingestTransfer(params: {
   const { handshake, company, fileName, storedName, buffer, presentedPath, mode } = params;
 
   const presented: PresentedTransfer = {
-    companyId: company?.companyId ?? null,
+    siteName: company?.siteName ?? null,
     filePath: presentedPath,
   };
 
@@ -549,11 +549,11 @@ export async function ingestTransfer(params: {
   const validation: TransferValidation = company
     ? validateTransfer(company, presented)
     : {
-        companyIdMatch: false,
+        siteNameMatch: false,
         pathMatch: false,
         passed: false,
-        reason: 'These credentials are not linked to a registered company',
-        expected: { companyId: '\u2014', filePath: '\u2014' },
+        reason: 'These credentials are not linked to a registered site',
+        expected: { siteName: '\u2014', designatedPath: '\u2014' },
         presented,
       };
 
@@ -564,9 +564,9 @@ export async function ingestTransfer(params: {
       storedName,
       sizeBytes: buffer.length,
       mode,
-      presentedCompanyId: presented.companyId,
+      presentedSiteName: presented.siteName,
       presentedPath: presented.filePath,
-      companyIdMatch: validation.companyIdMatch,
+      siteNameMatch: validation.siteNameMatch,
       pathMatch: validation.pathMatch,
       validationPassed: validation.passed,
       status: 'RECEIVED',
@@ -600,19 +600,19 @@ export async function ingestTransfer(params: {
           ? 'PARTIAL'
           : 'PARSED';
 
-    // File it in the data tree — <companyId>/<month>/<date>/<timestamp>/<file> —
+    // File it in the data tree — <siteName>/<month>/<date>/<timestamp>/<file> —
     // and index that location in the data table. Prefer the poll pipeline for
     // new intakes; this path remains for older callers that still ingest inline.
     if (company) {
       try {
         const at = new Date();
-        const where = dataTreeLocation(company.companyId, fileName, at);
+        const where = dataTreeLocation(company.siteName, fileName, at);
         await fs.mkdir(path.dirname(where.absolutePath), { recursive: true });
         await fs.writeFile(where.absolutePath, buffer);
         await prisma.dataFile.create({
           data: {
             companyRecordId: company.id,
-            companyId: company.companyId,
+            siteName: company.siteName,
             monthFolder: where.monthFolder,
             dateFolder: where.dateFolder,
             timestampFolder: where.timestampFolder,
@@ -666,7 +666,7 @@ export async function ingestTransfer(params: {
 /**
  * Where CIDCO files every accepted CSV after poll1:
  *
- *   <dataRoot>/<companyId>/<month>/<date>/<timestamp>/<file>.csv
+ *   <dataRoot>/<siteName>/<month>/<date>/<timestamp>/<file>.csv
  *
  * `companies` is the master table; `data_files` indexes this tree.
  */
@@ -714,8 +714,8 @@ export type DataTreeLocation = {
 };
 
 /** Works out where one delivered file belongs in the tree. */
-export function dataTreeLocation(companyId: string, fileName: string, at = new Date()): DataTreeLocation {
-  const company = safeFolder(companyId);
+export function dataTreeLocation(siteName: string, fileName: string, at = new Date()): DataTreeLocation {
+  const company = safeFolder(siteName);
   const monthFolder = monthFolderFor(at);
   const dateFolder = dateFolderFor(at);
   const timestampFolder = timestampFolderFor(at);
@@ -745,25 +745,25 @@ export function isSharedSftpLogin(username: string, password: string) {
 }
 
 /**
- * The agent writes to `/<companyId>/<the path the CSV was taken from>/<file>`,
+ * The agent writes to `/<siteName>/<the path the CSV was taken from>/<file>`,
  * which is how both the company and the source path reach CIDCO over a
  * protocol that carries nothing but a filename.
  */
-export function parseAgentPath(remotePath: string): { companyId: string; declaredPath: string } | null {
+export function parseAgentPath(remotePath: string): { siteName: string; declaredPath: string } | null {
   const clean = normalisePath(remotePath);
   const withoutLeading = clean.replace(/^\/+/, '');
   const dir = path.posix.dirname(`/${withoutLeading}`);
   const segments = dir.replace(/^\/+/, '').split('/').filter(Boolean);
   if (segments.length === 0) return null;
-  const [companyId, ...rest] = segments;
-  return { companyId, declaredPath: normalisePath(rest.join('/')) || '/' };
+  const [siteName, ...rest] = segments;
+  return { siteName, declaredPath: normalisePath(rest.join('/')) || '/' };
 }
 
 /**
  * The remote path the agent writes to, built in one place so the server and
  * the Windows agent cannot disagree about it:
  *
- *   /<companyId>/<file>
+ *   /<siteName>/<file>
  *
  * e.g. "/ABCD123/ABCD123_21_09_2026_11-30-24_AQI.csv".
  *
@@ -774,8 +774,8 @@ export function parseAgentPath(remotePath: string): { companyId: string; declare
  * a network share it produced "/ABCD123/192.168.1.100/common/karthik/…", a
  * path on nobody's server. `parseAgentPath` still reads either shape.
  */
-export function agentRemotePath(companyId: string, fileName: string) {
-  const company = companyId.trim().replace(/^\/+|\/+$/g, '');
+export function agentRemotePath(siteName: string, fileName: string) {
+  const company = siteName.trim().replace(/^\/+|\/+$/g, '');
   const name = path.posix.basename(fileName);
   return `/${[company, name].filter(Boolean).join('/')}`;
 }

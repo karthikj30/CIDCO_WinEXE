@@ -14,7 +14,7 @@ import { AqiLineChart, DeliveriesChart, StatTile } from './Charts';
  * intake's own list is still here, below, for when it is used.
  */
 
-type Company = { companyId: string; companyName: string; fileCount: number };
+type Company = { siteName: string; fileCount: number };
 
 type LogRow = {
   id: string;
@@ -33,7 +33,7 @@ type LogRow = {
 };
 
 type Analytics = {
-  companyId: string | null;
+  siteName: string | null;
   totals: {
     files: number;
     archived: number;
@@ -64,7 +64,7 @@ const STATUS: Record<string, string> = {
 
 export default function TransfersPanel() {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [companyId, setCompanyId] = useState('');
+  const [siteName, setCompanyId] = useState('');
   const [data, setData] = useState<Analytics | null>(null);
   const [live, setLive] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,15 +77,14 @@ export default function TransfersPanel() {
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? 'Failed to load companies');
       const list: Company[] = json.data.tree.map((n: { company: Company; fileCount: number }) => ({
-        companyId: n.company.companyId,
-        companyName: n.company.companyName,
+        siteName: n.company.siteName,
         fileCount: n.fileCount,
       }));
       // Companies that have actually delivered first: opening on an empty one
       // looks like the portal is broken.
       list.sort((a, b) => b.fileCount - a.fileCount);
       setCompanies(list);
-      setCompanyId((current) => current || list.find((c) => c.fileCount > 0)?.companyId || list[0]?.companyId || '');
+      setCompanyId((current) => current || list.find((c) => c.fileCount > 0)?.siteName || list[0]?.siteName || '');
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -95,7 +94,7 @@ export default function TransfersPanel() {
   const loadAnalytics = useCallback(async (id: string) => {
     if (!id) return;
     try {
-      const res = await fetch(`/api/admin/sftp/analytics?companyId=${encodeURIComponent(id)}`);
+      const res = await fetch(`/api/admin/sftp/analytics?siteName=${encodeURIComponent(id)}`);
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? 'Failed to load');
       setData(json.data);
@@ -112,19 +111,19 @@ export default function TransfersPanel() {
   }, [loadCompanies]);
 
   useEffect(() => {
-    void loadAnalytics(companyId);
-  }, [companyId, loadAnalytics]);
+    void loadAnalytics(siteName);
+  }, [siteName, loadAnalytics]);
 
   // Live: the poll worker ingests on its own schedule, so a page opened once
   // and left on a wall goes stale within a tick.
   useEffect(() => {
-    if (!live || !companyId) return;
+    if (!live || !siteName) return;
     const t = setInterval(() => {
-      void loadAnalytics(companyId);
+      void loadAnalytics(siteName);
       void loadCompanies();
     }, 10_000);
     return () => clearInterval(t);
-  }, [live, companyId, loadAnalytics, loadCompanies]);
+  }, [live, siteName, loadAnalytics, loadCompanies]);
 
   const totals = data?.totals;
 
@@ -144,7 +143,7 @@ export default function TransfersPanel() {
           </label>
           <button
             onClick={() => {
-              void loadAnalytics(companyId);
+              void loadAnalytics(siteName);
               void loadCompanies();
             }}
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -160,14 +159,14 @@ export default function TransfersPanel() {
         <label htmlFor="tx-company" className="font-medium text-slate-600">Company</label>
         <select
           id="tx-company"
-          value={companyId}
+          value={siteName}
           onChange={(e) => setCompanyId(e.target.value)}
           className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800"
         >
           {companies.length === 0 && <option value="">No companies yet</option>}
           {companies.map((c) => (
-            <option key={c.companyId} value={c.companyId}>
-              {c.companyName} ({c.companyId}) — {c.fileCount} file{c.fileCount === 1 ? '' : 's'}
+            <option key={c.siteName} value={c.siteName}>
+              {c.siteName} ({c.siteName}) — {c.fileCount} file{c.fileCount === 1 ? '' : 's'}
             </option>
           ))}
         </select>
@@ -199,7 +198,7 @@ export default function TransfersPanel() {
 
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="text-sm font-semibold text-slate-900">
-              AQI over time — {companyId}
+              AQI over time — {siteName}
             </h3>
             <p className="mb-2 text-xs text-slate-500">
               Every reading in the delivered files, including rows that were rejected.

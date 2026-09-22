@@ -60,7 +60,7 @@ const AQI_FILE_RE =
   /^(.+?)_(\d{2})_(\d{2})_(\d{4})_(\d{2})-(\d{2})-(\d{2})_AQI\.(csv|xlsx)$/i;
 
 export type ParsedAqiFileName = {
-  companyId: string;
+  siteName: string;
   /** dd_mm_yyyy — the folder CIDCO files the day under. */
   dateFolder: string;
   /** hh-mm-ss — the name CIDCO gives the file itself. */
@@ -76,7 +76,7 @@ export function parseAqiFileName(fileName: string): ParsedAqiFileName | null {
   const match = AQI_FILE_RE.exec(base);
   if (!match) return null;
 
-  const [, companyId, dd, mm, yyyy, hh, mi, ss, extension] = match;
+  const [, siteName, dd, mm, yyyy, hh, mi, ss, extension] = match;
   const at = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss));
 
   // A name can be well-formed and still be nonsense — 32_13_2026 matches the
@@ -91,7 +91,7 @@ export function parseAqiFileName(fileName: string): ParsedAqiFileName | null {
   const dateFolder = `${dd}_${mm}_${yyyy}`;
   const timeStem = `${hh}-${mi}-${ss}`;
   return {
-    companyId,
+    siteName,
     dateFolder,
     timeStem,
     timestamp: `${dateFolder}_${timeStem}`,
@@ -124,7 +124,7 @@ export function folderPartsFromStamp(parsed: ParsedAqiFileName) {
 /**
  * Where poll1 files a CSV:
  *
- *   <dataRoot>/<companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv
+ *   <dataRoot>/<siteName>/<dd_mm_yyyy>/<hh-mm-ss>.csv
  *
  * The delivery time names the file, so the flat name the agent sent is not
  * kept — the company is the folder above the date, and the date folder is the
@@ -132,12 +132,12 @@ export function folderPartsFromStamp(parsed: ParsedAqiFileName) {
  * which would otherwise overwrite the first before poll2 ever saw it.
  */
 export function pollTreeLocation(
-  companyId: string,
+  siteName: string,
   fileName: string,
   parsed: ParsedAqiFileName,
   suffix = 0,
 ) {
-  const company = safeFolder(companyId);
+  const company = safeFolder(siteName);
   const { monthFolder, dateFolder, timestampFolder } = folderPartsFromStamp(parsed);
   const extension = parsed.extension === 'xlsx' ? 'xlsx' : 'csv';
   const leaf = `${parsed.timeStem}${suffix > 0 ? `_${suffix + 1}` : ''}.${extension}`;
@@ -207,10 +207,10 @@ export async function enqueueInboxFile(params: {
       storedName: inboxName,
       sizeBytes: buffer.length,
       mode,
-      presentedCompanyId: parsed?.companyId ?? company?.companyId ?? null,
+      presentedSiteName: parsed?.siteName ?? company?.siteName ?? null,
       presentedPath,
-      companyIdMatch: Boolean(company && parsed && company.companyId === parsed.companyId),
-      pathMatch: !presentedPath || !company?.filePath,
+      siteNameMatch: Boolean(company && parsed && company.siteName === parsed.siteName),
+      pathMatch: !presentedPath || !company?.designatedPath,
       validationPassed: false,
       status: 'RECEIVED',
       rejectionReason: null,
@@ -222,7 +222,7 @@ export async function enqueueInboxFile(params: {
     await prisma.dataFile.create({
       data: {
         companyRecordId: company.id,
-        companyId: company.companyId,
+        siteName: company.siteName,
         monthFolder: parsed ? folderPartsFromStamp(parsed).monthFolder : 'pending',
         dateFolder: parsed?.dateFolder ?? 'pending',
         timestampFolder: parsed?.timeStem ?? 'pending',
@@ -245,7 +245,7 @@ export async function enqueueInboxFile(params: {
 }
 
 /**
- * Poll 1 — fetch companyId + timestamp from the filename, ensure
+ * Poll 1 — fetch siteName + timestamp from the filename, ensure
  * company/month/date/timestamp exists (create if missing), move the file there.
  */
 export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
@@ -266,16 +266,14 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
         continue;
       }
 
-      let company = await prisma.company.findUnique({ where: { companyId: parsed.companyId } });
+      let company = await prisma.company.findUnique({ where: { siteName: parsed.siteName } });
       // Even without a registration, still file under the company id from the name.
       if (!company) {
         const owner = await sharedLoginHandshake();
         company = await prisma.company.create({
           data: {
-            companyId: parsed.companyId,
-            companyName: parsed.companyId,
-            architectServerIp: '0.0.0.0',
-            filePath: '',
+            siteName: parsed.siteName,
+            designatedPath: '',
             userId: owner?.architectId ?? null,
             active: true,
             notes: 'Auto-created by poll1 from inbound filename (no prior registration)',
@@ -287,9 +285,9 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
       // would land on the same name and the second would destroy the first
       // before poll2 ever read it. Step back to a free name instead; poll2's
       // duplicate check then reports it properly rather than data going quiet.
-      let where = pollTreeLocation(parsed.companyId, entry.name, parsed);
+      let where = pollTreeLocation(parsed.siteName, entry.name, parsed);
       for (let n = 1; n < 100 && (await pathExists(where.absolutePath)); n++) {
-        where = pollTreeLocation(parsed.companyId, entry.name, parsed, n);
+        where = pollTreeLocation(parsed.siteName, entry.name, parsed, n);
       }
       if (await pathExists(where.absolutePath)) {
         errors.push(`${entry.name}: ${where.relativePath} and 99 alternatives all exist`);
@@ -318,7 +316,7 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
           where: { id: existing.id },
           data: {
             companyRecordId: company.id,
-            companyId: company.companyId,
+            siteName: company.siteName,
             monthFolder: where.monthFolder,
             dateFolder: where.dateFolder,
             timestampFolder: where.timestampFolder,
@@ -338,7 +336,7 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
         await prisma.dataFile.create({
           data: {
             companyRecordId: company.id,
-            companyId: company.companyId,
+            siteName: company.siteName,
             monthFolder: where.monthFolder,
             dateFolder: where.dateFolder,
             timestampFolder: where.timestampFolder,
@@ -446,16 +444,16 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
         await failRow(row.id, steps);
         continue;
       }
-      if (parsed.companyId !== row.companyId) {
-        mark(INGESTION_STEPS[3], false, `filename company ${parsed.companyId} ≠ row ${row.companyId}`);
+      if (parsed.siteName !== row.siteName) {
+        mark(INGESTION_STEPS[3], false, `filename company ${parsed.siteName} ≠ row ${row.siteName}`);
         await failRow(row.id, steps);
         continue;
       }
-      if (!row.relativePath.startsWith(`${row.companyId}/${parsed.dateFolder}/`)) {
+      if (!row.relativePath.startsWith(`${row.siteName}/${parsed.dateFolder}/`)) {
         mark(
           INGESTION_STEPS[3],
           false,
-          `filed at ${row.relativePath}, but the name says ${row.companyId}/${parsed.dateFolder}/`,
+          `filed at ${row.relativePath}, but the name says ${row.siteName}/${parsed.dateFolder}/`,
         );
         await failRow(row.id, steps);
         continue;
@@ -473,7 +471,7 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
         await failRow(row.id, steps);
         continue;
       }
-      mark(INGESTION_STEPS[4], true, row.company.companyId);
+      mark(INGESTION_STEPS[4], true, row.company.siteName);
 
       // 6–7. Columns + data
       let sheet;
@@ -553,7 +551,7 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
       const duplicate = row.timestamp
         ? await prisma.dataFile.findFirst({
             where: {
-              companyId: row.companyId,
+              siteName: row.siteName,
               timestamp: row.timestamp,
               pollStatus: 'ARCHIVED',
               id: { not: row.id },
@@ -607,7 +605,7 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
           userId: handshake.architectId,
           action: 'SFTP_INGEST',
           detail:
-            `${row.companyId} ${row.fileName}: stored ${outcome.importedCount}/${outcome.rowCount} readings ` +
+            `${row.siteName} ${row.fileName}: stored ${outcome.importedCount}/${outcome.rowCount} readings ` +
             `from ${row.relativePath}`,
         },
       }).catch(() => undefined);
@@ -624,7 +622,7 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
       // The date folder comes along. Without it every day's "11-30-24.csv"
       // would land on the same archive path and overwrite the day before.
       const archivePath = path.join(
-        archiveRoot(), row.companyId, row.dateFolder, path.basename(row.relativePath),
+        archiveRoot(), row.siteName, row.dateFolder, path.basename(row.relativePath),
       );
       await fs.mkdir(path.dirname(archivePath), { recursive: true });
       await fs.rename(absolute, archivePath).catch(async () => {
@@ -659,7 +657,7 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
           rowCount: outcome.rowCount,
           importedCount: outcome.importedCount,
           aqiData: sheet.rows as unknown as Prisma.InputJsonValue,
-          relativePath: `archive/${row.companyId}/${row.dateFolder}/${path.basename(row.relativePath)}`,
+          relativePath: `archive/${row.siteName}/${row.dateFolder}/${path.basename(row.relativePath)}`,
         },
       });
 

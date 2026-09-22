@@ -27,12 +27,12 @@ type Row = {
 
 type Gap = { key: string; label: string; missing: number };
 
-type Props = { companyId: string; companyName: string };
+type Props = { siteName: string };
 
 const MAX_CELL = 22;
 const short = (v: string) => (v.length > MAX_CELL ? `${v.slice(0, MAX_CELL - 1)}…` : v);
 
-export default function AqiReadingsTable({ companyId, companyName }: Props) {
+export default function AqiReadingsTable({ siteName }: Props) {
   const [parameters, setParameters] = useState<Parameter[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [gaps, setGaps] = useState<Gap[]>([]);
@@ -44,7 +44,7 @@ export default function AqiReadingsTable({ companyId, companyName }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/sftp/data/rows?companyId=${encodeURIComponent(companyId)}`);
+      const res = await fetch(`/api/admin/sftp/data/rows?siteName=${encodeURIComponent(siteName)}`);
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? 'Failed to load readings');
       setParameters(json.data.parameters);
@@ -57,7 +57,7 @@ export default function AqiReadingsTable({ companyId, companyName }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [companyId]);
+  }, [siteName]);
 
   useEffect(() => {
     void load();
@@ -71,7 +71,7 @@ export default function AqiReadingsTable({ companyId, companyName }: Props) {
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-        Nothing has been ingested for {companyName} yet.
+        Nothing has been ingested for {siteName} yet.
       </div>
     );
   }

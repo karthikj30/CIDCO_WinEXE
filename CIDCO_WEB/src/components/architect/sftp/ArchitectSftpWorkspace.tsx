@@ -26,10 +26,10 @@ export type Upload = {
   errors: Array<{ row: number; error: string }> | null;
   receivedAt: string;
   parsedAt: string | null;
-  presentedCompanyId: string | null;
+  presentedSiteName: string | null;
   presentedIp: string | null;
   presentedPath: string | null;
-  companyIdMatch: boolean;
+  siteNameMatch: boolean;
   ipMatch: boolean;
   pathMatch: boolean;
   validationPassed: boolean;
@@ -37,11 +37,9 @@ export type Upload = {
 };
 
 type Company = {
-  companyId: string;
-  companyName: string;
-  architectServerIp: string;
-  filePath: string;
-  contactEmail: string | null;
+  siteName: string;
+  designatedPath: string;
+  email: string | null;
   active: boolean;
 };
 
@@ -267,9 +265,9 @@ export default function ArchitectSftpWorkspace() {
             {/* What CIDCO holds — and therefore what every transfer must match */}
             <div className="rounded-xl border border-violet-200 bg-violet-50 p-5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold text-violet-900">{account.company.companyName}</span>
+                <span className="font-semibold text-violet-900">{account.company.siteName}</span>
                 <span className="rounded bg-white/70 px-2 py-0.5 font-mono text-xs text-violet-800">
-                  {account.company.companyId}
+                  {account.company.siteName}
                 </span>
                 {!account.company.active && (
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">INACTIVE</span>
@@ -282,11 +280,11 @@ export default function ArchitectSftpWorkspace() {
               <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
                 <div>
                   <dt className="font-semibold uppercase tracking-wide text-violet-700">Your server IP</dt>
-                  <dd className="mt-0.5 font-mono text-sm text-violet-950">{account.company.architectServerIp}</dd>
+                  <dd className="mt-0.5 font-mono text-sm text-violet-950">{''}</dd>
                 </div>
                 <div>
                   <dt className="font-semibold uppercase tracking-wide text-violet-700">File path</dt>
-                  <dd className="mt-0.5 break-all font-mono text-sm text-violet-950">{account.company.filePath}</dd>
+                  <dd className="mt-0.5 break-all font-mono text-sm text-violet-950">{account.company.designatedPath}</dd>
                 </div>
                 <div>
                   <dt className="font-semibold uppercase tracking-wide text-violet-700">Send to</dt>
@@ -302,7 +300,7 @@ export default function ArchitectSftpWorkspace() {
               password={password}
               designatedIp={ep?.designatedIp ?? ''}
               port={ep?.port ?? 0}
-              registeredPath={account.company.filePath}
+              registeredPath={account.company.designatedPath}
               delivered={account.uploads}
               onTransferred={() => connect(true)}
             />
@@ -315,11 +313,11 @@ export default function ArchitectSftpWorkspace() {
                   <p className="mt-1 text-xs leading-relaxed text-slate-500">
                     On your own server, point any SFTP client at the designated address with your user
                     id and password, and put the CSV from{' '}
-                    <code className="font-mono">{account.company.filePath}</code> on a schedule:
+                    <code className="font-mono">{account.company.designatedPath}</code> on a schedule:
                   </p>
                   <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] leading-relaxed text-slate-100">
 {`sftp -P ${ep?.port} ${account.username}@${ep?.designatedIp}
-sftp> put ${account.company.filePath}/readings.csv ${account.company.filePath}/`}
+sftp> put ${account.company.designatedPath}/readings.csv ${account.company.designatedPath}/`}
                   </pre>
                   <p className="mt-2 text-xs text-slate-500">
                     The repo ships a ready-made sender —{' '}
@@ -384,8 +382,8 @@ sftp> put ${account.company.filePath}/readings.csv ${account.company.filePath}/`
                       </div>
 
                       <p className="mt-2 flex flex-wrap gap-3 text-[11px]">
-                        <span className={u.companyIdMatch ? 'text-emerald-700' : 'text-red-700'}>
-                          {u.companyIdMatch ? '✓' : '✕'} company id {u.presentedCompanyId ?? '—'}
+                        <span className={u.siteNameMatch ? 'text-emerald-700' : 'text-red-700'}>
+                          {u.siteNameMatch ? '✓' : '✕'} company id {u.presentedSiteName ?? '—'}
                         </span>
                         <span className={u.ipMatch ? 'text-emerald-700' : 'text-red-700'}>
                           {u.ipMatch ? '✓' : '✕'} from {u.presentedIp ?? '—'}

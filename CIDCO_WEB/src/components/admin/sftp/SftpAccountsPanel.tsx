@@ -13,11 +13,9 @@ type Account = {
   establishedAt: string | null;
   company: {
     id: string;
-    companyId: string;
-    companyName: string;
-    architectServerIp: string;
-    filePath: string;
-    contactEmail: string | null;
+    siteName: string;
+    designatedPath: string;
+    email: string | null;
     active: boolean;
   } | null;
   uploadCount: number;
@@ -31,7 +29,7 @@ type Account = {
 
 /** One file this company has actually delivered. */
 type Delivery = {
-  companyId: string;
+  siteName: string;
   fileName: string;
   deliveredName: string | null;
   relativePath: string;
@@ -161,8 +159,8 @@ export default function SftpAccountsPanel() {
                         <td className="px-4 py-3">
                           {a.company ? (
                             <>
-                              <p className="font-medium text-slate-900">{a.company.companyName}</p>
-                              <p className="font-mono text-xs text-slate-500">{a.company.companyId}</p>
+                              <p className="font-medium text-slate-900">{a.company.siteName}</p>
+                              <p className="font-mono text-xs text-slate-500">{a.company.siteName}</p>
                             </>
                           ) : (
                             <span className="text-xs text-amber-700">no registration</span>
@@ -181,7 +179,7 @@ export default function SftpAccountsPanel() {
                           )}
                         </td>
                         <td className="px-4 py-3 break-all font-mono text-xs text-slate-600">
-                          {a.lastDelivery?.relativePath ?? a.company?.filePath ?? '—'}
+                          {a.lastDelivery?.relativePath ?? a.company?.designatedPath ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-xs text-slate-600">
                           {a.deliveryCount === 0 ? (
@@ -231,7 +229,7 @@ export default function SftpAccountsPanel() {
                               Last transactions · user id{' '}
                               <span className="font-mono normal-case text-slate-700">{a.username}</span> · company{' '}
                               <span className="font-mono normal-case text-slate-700">
-                                {a.company?.companyId ?? '—'}
+                                {a.company?.siteName ?? '—'}
                               </span>
                             </p>
                             {a.deliveries.length === 0 ? (

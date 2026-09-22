@@ -7,7 +7,7 @@ import { AQI_PARAMETERS, readingsOf } from '@/lib/aqiRows';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/admin/sftp/data/rows?companyId=ABCD123
+ * GET /api/admin/sftp/data/rows?siteName=ABCD123
  *
  * Every AQI reading CIDCO holds for a company, flattened out of the files it
  * arrived in, one row per reading — with the parameters that reading is
@@ -22,11 +22,11 @@ export async function GET(req: NextRequest) {
     if ('error' in guard) return guard.error;
 
     const url = new URL(req.url);
-    const companyId = url.searchParams.get('companyId');
+    const siteName = url.searchParams.get('siteName');
     const limit = Math.min(Number(url.searchParams.get('limit') ?? 500) || 500, 2000);
 
     const files = await prisma.dataFile.findMany({
-      where: companyId ? { companyId } : {},
+      where: siteName ? { siteName } : {},
       orderBy: { receivedAt: 'desc' },
       take: 200,
     });

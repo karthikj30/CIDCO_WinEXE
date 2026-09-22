@@ -42,9 +42,9 @@ export async function GET(req: NextRequest) {
         receivedAt: true,
         parsedAt: true,
         // The validation CIDCO ran on this transfer.
-        presentedCompanyId: true,
+        presentedSiteName: true,
         presentedPath: true,
-        companyIdMatch: true,
+        siteNameMatch: true,
         pathMatch: true,
         validationPassed: true,
         rejectionReason: true,
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
             clientId: true,
             architect: { select: { id: true, name: true, email: true, firmName: true } },
             company: {
-              select: { companyId: true, companyName: true, architectServerIp: true, filePath: true },
+              select: { siteName: true, designatedPath: true },
             },
           },
         },

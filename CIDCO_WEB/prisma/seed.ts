@@ -185,15 +185,13 @@ async function main() {
 
   // The demo company the Windows agent ships pointed at.
   await prisma.company.upsert({
-    where: { companyId: 'ABCD123' },
+    where: { siteName: 'ABCD123' },
     update: {},
     create: {
-      companyId: 'ABCD123',
-      companyName: 'Demo Architect Firm',
+      siteName: 'ABCD123',
       // Local by default so the agent works against a dev server out of the box.
-      architectServerIp: process.env.DEMO_COMPANY_IP || '127.0.0.1',
-      filePath: process.env.DEMO_COMPANY_PATH || 'C:/CIDCO/exports',
-      contactEmail: 'demo@architect.example',
+      designatedPath: process.env.DEMO_COMPANY_PATH || 'C:/CIDCO/exports',
+      email: 'demo@architect.example',
       notes: 'Seeded for the CIDCO_WinEXE Windows agent.',
     },
   });

@@ -7,7 +7,7 @@ import AqiReadingsTable from './AqiReadingsTable';
 /**
  * The DATA table, browsed as the folder tree it is stored in:
  *
- *   <companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv
+ *   <siteName>/<dd_mm_yyyy>/<hh-mm-ss>.csv
  *
  * Each company node carries its MASTER row, so an officer reads the
  * registration and everything delivered under it in one place.
@@ -30,13 +30,11 @@ type DataFile = {
 type Node = {
   company: {
     id: string;
-    companyId: string;
-    companyName: string;
-    architectServerIp: string;
-    filePath: string;
+    siteName: string;
+    designatedPath: string;
     publicKey: string | null;
     userId: string | null;
-    contactEmail: string | null;
+    email: string | null;
     active: boolean;
     createdAt: string;
   };
@@ -98,7 +96,7 @@ export default function SftpDataPanel() {
               <>
                 Every CSV CIDCO has accepted, filed as{' '}
                 <code className="rounded bg-slate-100 px-1 font-mono text-xs">
-                  companyId / dd_mm_yyyy / hh-mm-ss.csv
+                  siteName / dd_mm_yyyy / hh-mm-ss.csv
                 </code>
                 . Poll2 writes the AQI SFTP Ingestion Service status on each file.
               </>
@@ -173,7 +171,7 @@ export default function SftpDataPanel() {
       )}
 
       {view === 'readings' ? (
-        <ReadingsView tree={tree} companyId={tableCompany} onCompany={setTableCompany} />
+        <ReadingsView tree={tree} siteName={tableCompany} onCompany={setTableCompany} />
       ) : loading && tree.length === 0 ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : tree.length === 0 ? (
@@ -183,17 +181,17 @@ export default function SftpDataPanel() {
       ) : (
         <div className="space-y-3">
           {tree.map((node) => {
-            const isOpen = openCompany === node.company.companyId;
+            const isOpen = openCompany === node.company.siteName;
             return (
               <div key={node.company.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <button
-                  onClick={() => setOpenCompany(isOpen ? null : node.company.companyId)}
+                  onClick={() => setOpenCompany(isOpen ? null : node.company.siteName)}
                   className="flex w-full flex-wrap items-center gap-3 px-5 py-4 text-left hover:bg-slate-50"
                 >
                   <span className="text-slate-400">{isOpen ? '▾' : '▸'}</span>
-                  <span className="font-semibold text-slate-900">{node.company.companyName}</span>
+                  <span className="font-semibold text-slate-900">{node.company.siteName}</span>
                   <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-700">
-                    {node.company.companyId}
+                    {node.company.siteName}
                   </span>
                   {!node.company.active && (
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">INACTIVE</span>
@@ -219,11 +217,11 @@ export default function SftpDataPanel() {
                       </div>
                       <div>
                         <dt className="font-semibold uppercase tracking-wide text-slate-500">Architect server IP</dt>
-                        <dd className="mt-0.5 font-mono text-slate-900">{node.company.architectServerIp}</dd>
+                        <dd className="mt-0.5 font-mono text-slate-900">{''}</dd>
                       </div>
                       <div>
                         <dt className="font-semibold uppercase tracking-wide text-slate-500">Registered file path</dt>
-                        <dd className="mt-0.5 break-all font-mono text-slate-900">{node.company.filePath || '(none — poll1 creates tree)'}</dd>
+                        <dd className="mt-0.5 break-all font-mono text-slate-900">{node.company.designatedPath || '(none — poll1 creates tree)'}</dd>
                       </div>
                     </dl>
 
@@ -232,7 +230,7 @@ export default function SftpDataPanel() {
                     ) : (
                       <div className="mt-4 space-y-2">
                         {node.days.map((day) => {
-                          const key = `${node.company.companyId}/${day.dateFolder}`;
+                          const key = `${node.company.siteName}/${day.dateFolder}`;
                           const dayOpen = openMonth === key;
                           return (
                             <div key={key} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -318,18 +316,18 @@ export default function SftpDataPanel() {
  */
 function ReadingsView({
   tree,
-  companyId,
+  siteName,
   onCompany,
 }: {
   tree: Node[];
-  companyId: string;
+  siteName: string;
   onCompany: (id: string) => void;
 }) {
   const withData = tree.filter((n) => n.fileCount > 0);
   // Default to whichever company has actually delivered something, so the
   // view opens on data rather than on an empty picker.
-  const selected = companyId || withData[0]?.company.companyId || '';
-  const node = withData.find((n) => n.company.companyId === selected);
+  const selected = siteName || withData[0]?.company.siteName || '';
+  const node = withData.find((n) => n.company.siteName === selected);
 
   if (withData.length === 0) {
     return (
@@ -352,8 +350,8 @@ function ReadingsView({
           className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800"
         >
           {withData.map((n) => (
-            <option key={n.company.companyId} value={n.company.companyId}>
-              {n.company.companyName} ({n.company.companyId}) — {n.fileCount} file
+            <option key={n.company.siteName} value={n.company.siteName}>
+              {n.company.siteName} ({n.company.siteName}) — {n.fileCount} file
               {n.fileCount === 1 ? '' : 's'}
             </option>
           ))}
@@ -361,7 +359,7 @@ function ReadingsView({
       </div>
 
       {node && (
-        <AqiReadingsTable companyId={node.company.companyId} companyName={node.company.companyName} />
+        <AqiReadingsTable siteName={node.company.siteName} />
       )}
     </div>
   );

@@ -51,9 +51,9 @@ export async function POST(req: NextRequest) {
             errors: true,
             receivedAt: true,
             parsedAt: true,
-            presentedCompanyId: true,
+            presentedSiteName: true,
             presentedPath: true,
-            companyIdMatch: true,
+            siteNameMatch: true,
             pathMatch: true,
             validationPassed: true,
             rejectionReason: true,
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       return fail('These credentials are not linked to a registered company. Ask CIDCO to check the registration.', 409);
     }
     if (!handshake.company.active) {
-      return fail(`The registration for ${handshake.company.companyName} is inactive.`, 403);
+      return fail(`The registration for ${handshake.company.siteName} is inactive.`, 403);
     }
 
     return ok({
@@ -87,11 +87,9 @@ export async function POST(req: NextRequest) {
         credentialExpiresAt: handshake.credentialExpiresAt,
         establishedAt: handshake.establishedAt,
         company: {
-          companyId: handshake.company.companyId,
-          companyName: handshake.company.companyName,
-          architectServerIp: handshake.company.architectServerIp,
-          filePath: handshake.company.filePath,
-          contactEmail: handshake.company.contactEmail,
+          siteName: handshake.company.siteName,
+          designatedPath: handshake.company.designatedPath,
+          email: handshake.company.email,
           active: handshake.company.active,
         },
         uploads: handshake.sftpUploads,

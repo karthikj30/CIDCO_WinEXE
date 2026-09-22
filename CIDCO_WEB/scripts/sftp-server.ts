@@ -55,7 +55,7 @@ type Account = { handshake: ArchitectHandshake; company: Company | null; shared:
 
 /** Where this account is expected to write — the registered file path. */
 function expectedDir(account: Account) {
-  return normalisePath(account.company?.filePath) || '/upload';
+  return normalisePath(account.company?.designatedPath) || '/upload';
 }
 
 function log(...parts: unknown[]) {
@@ -166,23 +166,15 @@ async function authorise(username: string, password: string, ip: string | null, 
   if (!company.active) {
     return {
       ok: false,
-      reason: `The registration for ${company.companyName} (${company.companyId}) is inactive`,
+      reason: `The registration for ${company.siteName} (${company.siteName}) is inactive`,
       handshakeId: handshake.id,
       event: 'SFTP_AUTH_FAILED',
     };
   }
 
-  // The registered server address is the only one data may arrive from.
-  if ((company.architectServerIp) !== (ip)) {
-    return {
-      ok: false,
-      reason:
-        `${company.companyId} is registered to ${company.architectServerIp}; ` +
-        `refusing a connection from ${ip ?? 'unknown'}`,
-      handshakeId: handshake.id,
-      event: 'SFTP_IP_REFUSED',
-    };
-  }
+  // The registered address used to be the only one data could arrive from.
+  // The master record no longer carries one: it was never known for a plain
+  // SFTP delivery, so the check could only pass by being skipped.
 
   // Keep the channel record current so the dashboards read correctly.
   await prisma.architectHandshake.update({
@@ -190,7 +182,6 @@ async function authorise(username: string, password: string, ip: string | null, 
     data: {
       status: 'ESTABLISHED',
       establishedAt: handshake.establishedAt ?? new Date(),
-      whitelistedIp: company.architectServerIp,
       whitelistedAt: handshake.whitelistedAt ?? new Date(),
       deviceInfo: client,
       lastValidatedIp: ip,
@@ -209,7 +200,7 @@ type WriteHandle = {
   /** The directory the client wrote to — validated against the company record. */
   dir: string;
   /** Named in the path by the shared login; absent for per-company credentials. */
-  companyId?: string;
+  siteName?: string;
   /** The remote path exactly as the client asked for it, for the stat after a put. */
   remote: string;
   chunks: Buffer[];
@@ -342,10 +333,10 @@ function startSession(conn: Connection, account: Account, ip: string | null) {
         }
 
         if (account.shared) {
-          // The agent names its company first: /<companyId>/<source path>/<file>
+          // The agent names its company first: /<siteName>/<source path>/<file>
           const parsed = parseAgentPath(filename);
           if (!parsed) {
-            log(`refused ${base}: the shared login must write to /<companyId>/<path>/<file>`);
+            log(`refused ${base}: the shared login must write to /<siteName>/<path>/<file>`);
             return sftp.status(reqid, STATUS_CODE.PERMISSION_DENIED);
           }
           // An unregistered company is refused here and now, so the agent gets
@@ -354,10 +345,10 @@ function startSession(conn: Connection, account: Account, ip: string | null) {
           // through, so CIDCO records the refusal and why.
           void (async () => {
             const known = await prisma.company
-              .findUnique({ where: { companyId: parsed.companyId } })
+              .findUnique({ where: { siteName: parsed.siteName } })
               .catch(() => null);
             if (!known || !known.active) {
-              log(`refused ${base}: company "${parsed.companyId}" is not registered with CIDCO`);
+              log(`refused ${base}: company "${parsed.siteName}" is not registered with CIDCO`);
               return sftp.status(reqid, STATUS_CODE.PERMISSION_DENIED);
             }
             sftp.handle(
@@ -366,7 +357,7 @@ function startSession(conn: Connection, account: Account, ip: string | null) {
                 kind: 'file',
                 fileName: base,
                 dir: parsed.declaredPath,
-                companyId: parsed.companyId,
+                siteName: parsed.siteName,
                 remote: filename,
                 chunks: [],
                 bytes: 0,
@@ -444,10 +435,10 @@ async function receiveFile(account: Account, handle: WriteHandle, ip: string | n
   }
 
   // Company from the upload path, the account, or the renamed filename.
-  const fromName = parseAqiFileName(fileName)?.companyId;
-  const companyId = handle.companyId || account.company?.companyId || fromName || null;
-  const company = companyId
-    ? await prisma.company.findUnique({ where: { companyId } })
+  const fromName = parseAqiFileName(fileName)?.siteName;
+  const siteName = handle.siteName || account.company?.siteName || fromName || null;
+  const company = siteName
+    ? await prisma.company.findUnique({ where: { siteName } })
     : account.company;
 
   try {
@@ -471,7 +462,7 @@ async function receiveFile(account: Account, handle: WriteHandle, ip: string | n
       event: 'SFTP_FILE_RECEIVED',
       statusCode: 201,
       detail:
-        `"${fileName}" (${buffer.length} bytes) queued for company ${companyId ?? '—'} ` +
+        `"${fileName}" (${buffer.length} bytes) queued for company ${siteName ?? '—'} ` +
         `from ${ip} at "${handle.dir}" — poll1 will file it, poll2 will ingest.`,
       ip,
     });
@@ -533,7 +524,7 @@ async function main() {
               event: 'SFTP_CONNECTED',
               statusCode: 200,
               detail:
-                `SFTP session opened for ${company?.companyName} (${company?.companyId}) ` +
+                `SFTP session opened for ${company?.siteName} (${company?.siteName}) ` +
                 `from ${ip ?? 'unknown'} · client: ${client}`,
               ip,
             });

@@ -18,28 +18,28 @@ export async function GET(req: NextRequest) {
     const guard = await requireCidco(req);
     if ('error' in guard) return guard.error;
 
-    const companyId = new URL(req.url).searchParams.get('companyId');
+    const siteName = new URL(req.url).searchParams.get('siteName');
 
     const [companies, files] = await Promise.all([
-      prisma.company.findMany({ orderBy: { companyName: 'asc' } }),
+      prisma.company.findMany({ orderBy: { siteName: 'asc' } }),
       prisma.dataFile.findMany({
-        where: companyId ? { companyId } : {},
+        where: siteName ? { siteName } : {},
         orderBy: { receivedAt: 'desc' },
         take: 1000,
       }),
     ]);
 
     // Group into company → day, newest first at both levels. The tree on disk
-    // is two deep now — <companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv — so a month
+    // is two deep now — <siteName>/<dd_mm_yyyy>/<hh-mm-ss>.csv — so a month
     // level here would be a folder nobody could go and look at.
     type Row = (typeof files)[number];
     const byCompany = new Map<string, Map<string, Row[]>>();
     for (const file of files) {
-      const days = byCompany.get(file.companyId) ?? new Map<string, Row[]>();
+      const days = byCompany.get(file.siteName) ?? new Map<string, Row[]>();
       const list = days.get(file.dateFolder) ?? [];
       list.push(file);
       days.set(file.dateFolder, list);
-      byCompany.set(file.companyId, days);
+      byCompany.set(file.siteName, days);
     }
 
     // dd_mm_yyyy does not sort as text — 02_10 would come before 21_09. Sort
@@ -51,18 +51,16 @@ export async function GET(req: NextRequest) {
 
     const tree = companies
       .map((company) => {
-        const days = byCompany.get(company.companyId) ?? new Map<string, Row[]>();
+        const days = byCompany.get(company.siteName) ?? new Map<string, Row[]>();
         return {
           // The master row.
           company: {
             id: company.id,
-            companyId: company.companyId,
-            companyName: company.companyName,
-            architectServerIp: company.architectServerIp,
-            filePath: company.filePath,
+            siteName: company.siteName,
+            designatedPath: company.designatedPath,
             publicKey: company.publicKey,
             userId: company.userId,
-            contactEmail: company.contactEmail,
+            email: company.email,
             active: company.active,
             createdAt: company.createdAt,
           },

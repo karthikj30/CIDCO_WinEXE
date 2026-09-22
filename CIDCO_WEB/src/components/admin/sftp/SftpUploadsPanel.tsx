@@ -15,9 +15,9 @@ type Row = {
   failedCount: number;
   receivedAt: string;
   parsedAt: string | null;
-  presentedCompanyId: string | null;
+  presentedSiteName: string | null;
   presentedPath: string | null;
-  companyIdMatch: boolean;
+  siteNameMatch: boolean;
   pathMatch: boolean;
   validationPassed: boolean;
   rejectionReason: string | null;
@@ -25,7 +25,7 @@ type Row = {
     id: string;
     clientId: string;
     architect: { id: string; name: string; email: string; firmName: string | null };
-    company: { companyId: string; companyName: string; architectServerIp: string; filePath: string } | null;
+    company: { siteName: string } | null;
   };
 };
 
@@ -40,8 +40,8 @@ type Detail = Row & {
   validation: {
     passed: boolean;
     reason: string | null;
-    companyId: Field;
-    filePath: Field;
+    siteName: Field;
+    designatedPath: Field;
   };
   handshake: Row['handshake'] & { whitelistedIp: string | null };
 };
@@ -63,8 +63,8 @@ const UPLOAD_STATUS: Record<string, string> = {
  */
 function ValidationTable({ validation }: { validation: Detail['validation'] }) {
   const rows: Array<[string, Field]> = [
-    ['Company id', validation.companyId],
-    ['File path', validation.filePath],
+    ['Company id', validation.siteName],
+    ['Designated path', validation.designatedPath],
   ];
   return (
     <div
@@ -240,13 +240,13 @@ export default function SftpUploadsPanel() {
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    {u.handshake.company?.companyName ?? u.handshake.architect.name} ·{' '}
-                    <span className="font-mono">{u.presentedCompanyId ?? u.handshake.clientId}</span> ·{' '}
+                    {u.handshake.company?.siteName ?? u.handshake.architect.name} ·{' '}
+                    <span className="font-mono">{u.presentedSiteName ?? u.handshake.clientId}</span> ·{' '}
                     {kb(u.sizeBytes)} · {fmt(u.receivedAt)}
                   </p>
                   <p className="mt-1 flex flex-wrap gap-2 text-[11px]">
-                    <span className={u.companyIdMatch ? 'text-emerald-700' : 'text-red-700'}>
-                      {u.companyIdMatch ? '✓' : '✕'} company id
+                    <span className={u.siteNameMatch ? 'text-emerald-700' : 'text-red-700'}>
+                      {u.siteNameMatch ? '✓' : '✕'} company id
                     </span>
                     <span className={u.pathMatch ? 'text-emerald-700' : 'text-red-700'}>
                       {u.pathMatch ? '✓' : '✕'} file path

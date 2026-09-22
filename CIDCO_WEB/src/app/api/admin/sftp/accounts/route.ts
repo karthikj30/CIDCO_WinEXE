@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 const issueSchema = z.object({
   /** The registered company these credentials belong to. */
-  companyId: z.string().min(2, 'Pick the company to issue credentials for'),
+  siteName: z.string().min(2, 'Pick the company to issue credentials for'),
   expiresInDays: z.coerce.number().int().positive().max(3650).optional(),
 });
 
@@ -48,13 +48,13 @@ export async function GET(req: NextRequest) {
     // by the poll worker and never touches it, so an account doing exactly
     // what it should showed "never used" — which is the opposite of the truth
     // and the one thing this page exists to say.
-    const companyIds = rows.map((h) => h.company?.companyId).filter(Boolean) as string[];
+    const companyIds = rows.map((h) => h.company?.siteName).filter(Boolean) as string[];
     const deliveries = companyIds.length
       ? await prisma.dataFile.findMany({
-          where: { companyId: { in: companyIds } },
+          where: { siteName: { in: companyIds } },
           orderBy: { receivedAt: 'desc' },
           select: {
-            companyId: true,
+            siteName: true,
             fileName: true,
             deliveredName: true,
             relativePath: true,
@@ -69,9 +69,9 @@ export async function GET(req: NextRequest) {
 
     const byCompany = new Map<string, typeof deliveries>();
     for (const d of deliveries) {
-      const list = byCompany.get(d.companyId) ?? [];
+      const list = byCompany.get(d.siteName) ?? [];
       list.push(d);
-      byCompany.set(d.companyId, list);
+      byCompany.set(d.siteName, list);
     }
 
     const now = Date.now();
@@ -88,11 +88,9 @@ export async function GET(req: NextRequest) {
         company: h.company
           ? {
               id: h.company.id,
-              companyId: h.company.companyId,
-              companyName: h.company.companyName,
-              architectServerIp: h.company.architectServerIp,
-              filePath: h.company.filePath,
-              contactEmail: h.company.contactEmail,
+              siteName: h.company.siteName,
+              designatedPath: h.company.designatedPath,
+              email: h.company.email,
               active: h.company.active,
             }
           : null,
@@ -101,9 +99,9 @@ export async function GET(req: NextRequest) {
         createdAt: h.createdAt,
         revokedAt: h.revokedAt,
         /** Everything this company has delivered, newest first. */
-        deliveries: (byCompany.get(h.company?.companyId ?? '') ?? []).slice(0, 10),
-        deliveryCount: (byCompany.get(h.company?.companyId ?? '') ?? []).length,
-        lastDelivery: (byCompany.get(h.company?.companyId ?? '') ?? [])[0] ?? null,
+        deliveries: (byCompany.get(h.company?.siteName ?? '') ?? []).slice(0, 10),
+        deliveryCount: (byCompany.get(h.company?.siteName ?? '') ?? []).length,
+        lastDelivery: (byCompany.get(h.company?.siteName ?? '') ?? [])[0] ?? null,
       })),
     });
   } catch (error) {
@@ -126,14 +124,14 @@ export async function POST(req: NextRequest) {
 
     const data = issueSchema.parse(await req.json());
 
-    const company = await prisma.company.findUnique({ where: { companyId: data.companyId } });
+    const company = await prisma.company.findUnique({ where: { siteName: data.siteName } });
     if (!company) {
-      return fail(`No company registered with id "${data.companyId}". Register the company first.`, 404);
+      return fail(`No company registered with id "${data.siteName}". Register the company first.`, 404);
     }
     if (!company.active) return fail('That company registration is inactive', 409);
 
     // SFTP user id = the company id CIDCO registered (e.g. test03).
-    const username = company.companyId;
+    const username = company.siteName;
     const taken = await prisma.architectHandshake.findUnique({ where: { clientId: username } });
     if (taken) {
       return fail(
@@ -167,7 +165,7 @@ export async function POST(req: NextRequest) {
         // is open from here — every transfer is still validated individually.
         status: 'ESTABLISHED',
         establishedAt: new Date(),
-        whitelistedIp: company.architectServerIp,
+        whitelistedIp: '',
         whitelistedAt: new Date(),
       },
     });
@@ -178,9 +176,9 @@ export async function POST(req: NextRequest) {
       event: 'SFTP_CREDENTIALS_ISSUED',
       statusCode: 201,
       detail:
-        `SFTP user id issued for ${company.companyName} (${company.companyId})` +
-        `${company.contactEmail ? `, contact ${company.contactEmail}` : ''}; ` +
-        `data accepted from ${company.architectServerIp} at "${company.filePath}"; ` +
+        `SFTP user id issued for ${company.siteName} (${company.siteName})` +
+        `${company.email ? `, contact ${company.email}` : ''}; ` +
+        `data accepted from ${''} at "${company.designatedPath}"; ` +
         `valid until ${credentialExpiresAt.toISOString()}`,
       ip: clientIp(req),
     });
@@ -194,21 +192,20 @@ export async function POST(req: NextRequest) {
         account: {
           id: handshake.id,
           status: handshake.status,
-          contactEmail: company.contactEmail,
+          email: company.email,
           createdAt: handshake.createdAt,
         },
         // Exactly what the officer sends: the portal login every architect
         // uses, their company's SFTP user id, and where to send.
         portalLogin: { email: SHARED_ARCHITECT_EMAIL, password: SHARED_ARCHITECT_PASSWORD, signInAt: '/' },
         credential: {
-          companyName: company.companyName,
-          companyId: company.companyId,
+          siteName: company.siteName,
           username,
           password: secret,
           designatedIp: endpoint.designatedIp,
           port: endpoint.port,
           protocol: endpoint.protocol,
-          filePath: company.filePath,
+          designatedPath: company.designatedPath,
           fileTypes: endpoint.fileTypes,
           expiryDate: credentialExpiresAt.toISOString(),
         },
@@ -266,7 +263,7 @@ export async function PATCH(req: NextRequest) {
       statusCode: 200,
       detail:
         `${guard.user.email} ${revoking ? 'revoked' : 'granted'} SFTP access for ` +
-        `${account.company?.companyId ?? account.clientId}`,
+        `${account.company?.siteName ?? account.clientId}`,
       ip: clientIp(req),
     }).catch(() => undefined);
 
