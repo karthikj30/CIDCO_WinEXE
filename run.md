@@ -252,6 +252,13 @@ poll worker must be able to read **and delete** from it — poll1 moves files ou
 
 ### 3. Make yourself a CIDCO officer
 
+**From the portal** — open `/cidco` or `/cidco/sftp`, choose **Sign up**, and
+create the account. The first officer needs no code; every one after needs
+`CIDCO_OFFICER_SIGNUP_CODE` from `CIDCO_WEB/.env`. Officers see every
+company's data.
+
+Or from the shell, which also promotes an account created by mistake:
+
 Signing up on the portal creates an **architect**, which is why *Data* answers
 *CIDCO officer sign-in required*. Officers are created here, because an officer
 reads every company's data:
