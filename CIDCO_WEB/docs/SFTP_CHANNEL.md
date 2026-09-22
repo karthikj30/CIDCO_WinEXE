@@ -18,28 +18,28 @@ every later transfer is checked against.
 
 | # | Who | Action | Where |
 |---|-----|--------|-------|
-| **i** | CIDCO | **Registers the company**: company name, company id, the architect's server IP, and the file path their CSV is taken from | `/cidco/sftp` → Companies |
+| **i** | CIDCO | **Registers the company**: site name, user id, keys, designated path, contact (mobile, email, address, architect), department, and node | `/cidco/sftp` → Companies |
 | **1** | CIDCO | **Emails the architect** the shared portal login, plus their company's SFTP user id, password and the **designated IP** to send to | `/cidco/sftp` → Companies → Issue credentials |
 | **2** | Architect | **Sends automatically** — takes the CSV from the registered path and puts it on the designated address | their own server |
 | **✓** | CIDCO | **Validates every single transfer** against the registration, then stores the readings | `/cidco/sftp` → Delivered transfers |
 
-Two different addresses are in play, and it is worth keeping them straight:
-
-- the **designated IP** — CIDCO's address, emailed to the architect, the one they send *to*;
-- the **architect's server IP** — registered by CIDCO, the only address data is accepted *from*.
+The **designated IP** is CIDCO's address, emailed to the architect — the one they send *to*. The
+architect's own machine IP is not stored or checked.
 
 ---
 
 ## i. Registering the company
 
-A CIDCO officer enters four things by hand:
+A CIDCO officer enters the site registration by hand:
 
 | Field | Meaning |
 |-------|---------|
-| **Company name** | e.g. `Nair Design Studio` |
-| **Company id** | CIDCO-assigned, e.g. `CIDCO-CO-0142`. Quoted on every transfer. |
-| **Architect's server IP** | e.g. `203.0.113.9`. Data is only accepted from here. |
-| **File path** | e.g. `/var/aqi/exports`. Where the CSV is picked up from, and written to here. |
+| **Site name** | e.g. `Nair Design Studio` — quoted on every transfer |
+| **User ID** | Portal / SFTP identity for the site |
+| **Public / private key** | Credentials CIDCO holds against the site |
+| **Designated path** | e.g. `/var/aqi/exports`. Where the CSV is picked up from, and written to here |
+| **Contact** | Mobile, email, address, architect name |
+| **Department / Node** | Planning NAINA, Planning Navi Mumbai, Engineering; nodes such as Pushpak, Ulwe |
 
 The architect's email goes in the same form and is **stored as contact detail only** — any email is
 accepted and no account is created for it.
@@ -313,14 +313,14 @@ An accepted file is written under `CIDCO_DATA_DIR` (default `./storage/cidco-dat
 ABCD123/2026-09-September/2026-09-18_Friday_07-02-17/readings.csv
 ```
 
-and a `data_files` row records where it landed, how many rows it held, how many were stored, the
-address it came from and when. The **Data** tab in `/cidco/sftp` walks that tree, showing each
+and a `data_files` row records where it landed, how many rows it held, how many were stored, and
+when. The **Data** tab in `/cidco/sftp` walks that tree, showing each
 company's master row above it, and every file can be downloaded exactly as it arrived.
 
 So the two tables divide as CIDCO asked:
 
-- **master** — `companies`, one row per registration: company id, name, architect server IP, file
-  path, contact.
+- **master** — `companies`, one row per registration: site name, user id, keys, designated path,
+  contact, department, node.
 - **data** — `data_files`, the folder tree of everything accepted, underneath its company.
 
 ### The CSV

@@ -277,11 +277,7 @@ export default function ArchitectSftpWorkspace() {
                 CIDCO validates every transfer against this registration. All three have to match or
                 nothing is stored.
               </p>
-              <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
-                <div>
-                  <dt className="font-semibold uppercase tracking-wide text-violet-700">Your server IP</dt>
-                  <dd className="mt-0.5 font-mono text-sm text-violet-950">{''}</dd>
-                </div>
+              <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
                 <div>
                   <dt className="font-semibold uppercase tracking-wide text-violet-700">File path</dt>
                   <dd className="mt-0.5 break-all font-mono text-sm text-violet-950">{account.company.designatedPath}</dd>

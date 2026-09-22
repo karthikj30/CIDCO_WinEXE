@@ -77,11 +77,11 @@ export default function SftpDocs() {
         </div>
 
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-          <p className="font-semibold">Two addresses, easily confused</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            <li>The <strong>designated IP</strong> is CIDCO&rsquo;s — emailed to you, the one you send <em>to</em>.</li>
-            <li>Your <strong>server IP</strong> is registered by CIDCO — the only address data is accepted <em>from</em>.</li>
-          </ul>
+          <p className="font-semibold">Designated IP</p>
+          <p className="mt-2">
+            The <strong>designated IP</strong> is CIDCO&rsquo;s — emailed to you, the address you send <em>to</em>.
+            Your own machine IP is not stored or checked.
+          </p>
         </div>
 
         <div className="mt-10 space-y-10">
@@ -202,10 +202,6 @@ npx tsx scripts/architect-sender.ts`}</Code>
           <Section id="status" title="4. When a transfer is refused">
             <p>Three things can stop a transfer, and each says so plainly:</p>
             <ul className="list-disc space-y-1 pl-6">
-              <li>
-                <strong>The address.</strong> A connection from anywhere but your registered server IP is
-                refused at login. Ask CIDCO to update the registration if you have moved server.
-              </li>
               <li>
                 <strong>The file path.</strong> Writing to a path other than the registered one is accepted
                 by the transport but refused on validation — the file is kept for the record and marked{' '}

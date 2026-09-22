@@ -18,7 +18,7 @@ import { buildCsvTemplate, SHEET_COLUMNS } from '../src/lib/sftp';
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const SFTP_HOST = '127.0.0.1';
 const SFTP_PORT = Number(process.env.SFTP_PORT || 2222);
-/** Everything here runs on one box, so this is the "architect's server IP". */
+/** Everything here runs on one box for local e2e. */
 const ARCHITECT_IP = '127.0.0.1';
 const FILE_PATH = '/var/aqi/exports';
 

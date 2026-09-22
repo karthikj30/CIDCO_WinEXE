@@ -145,10 +145,9 @@ CIDCO validates every single transfer, previews the file and imports the rows. P
 
 *Before any credentials exist:*
 
-- **i. CIDCO registers the company by hand** in *Companies*: company name, **company id**, the
-  **architect's server IP** (the only address data is accepted from) and the **file path** their CSV
-  is taken from, plus the architect's email — **stored as contact detail only**, no account is
-  created for it.
+- **i. CIDCO registers the company by hand** in *Companies*: **site name**, user id, keys, the
+  **designated path** their CSV is taken from, contact details (mobile, email, address, architect),
+  department and node — plus optional public/private keys.
 
 *Then:*
 

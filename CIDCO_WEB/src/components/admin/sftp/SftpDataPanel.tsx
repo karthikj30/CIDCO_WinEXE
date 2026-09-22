@@ -216,10 +216,6 @@ export default function SftpDataPanel() {
                         </dd>
                       </div>
                       <div>
-                        <dt className="font-semibold uppercase tracking-wide text-slate-500">Architect server IP</dt>
-                        <dd className="mt-0.5 font-mono text-slate-900">{''}</dd>
-                      </div>
-                      <div>
                         <dt className="font-semibold uppercase tracking-wide text-slate-500">Registered file path</dt>
                         <dd className="mt-0.5 break-all font-mono text-slate-900">{node.company.designatedPath || '(none — poll1 creates tree)'}</dd>
                       </div>
