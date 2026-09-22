@@ -70,7 +70,7 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
     /// A folder on the server to upload into, taken from the address.
     ///
     /// Empty for CIDCO, whose intake decides where a file goes from the
-    /// company id and the path the agent declares. Set when the architect
+    /// site name and the path the agent declares. Set when the architect
     /// names a folder outright — "13.207.123.12:22/home/ubuntu/uploads" — which
     /// is how you point the agent at an ordinary SFTP server, CIDCO's layout
     /// and validation being particular to CIDCO.
@@ -128,7 +128,7 @@ public sealed record ServerAddress(string Host, int Port, bool PortWasGiven)
         value = value.TrimEnd('/');
 
         // A path after the host is a plain SFTP destination: upload straight
-        // there, rather than into CIDCO's /<companyId>/<folder>/ tree. That is
+        // there, rather than into CIDCO's /<siteName>/<folder>/ tree. That is
         // how an ordinary SFTP client behaves, and it is what a dry run against
         // a test server needs — the CIDCO layout only exists on CIDCO's intake.
         var remoteDirectory = "";

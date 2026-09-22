@@ -85,7 +85,7 @@ public class DatabaseLifecycleTests
                 DesignatedIp = "10.0.0.9",
                 Port = 2222,
                 Username = "cidco@example.com",
-                CompanyId = "ABCD123",
+                SiteName = "ABCD123",
                 InstalledAt = DateTimeOffset.Now.ToString("o"),
             }.Save(db);
         }
@@ -96,7 +96,7 @@ public class DatabaseLifecycleTests
             var again = Settings.Load(db);
             Assert.Equal(@"C:\CIDCO\exports", again.CsvFolder);
             Assert.Equal(1800, again.IntervalSeconds);
-            Assert.Equal("ABCD123", again.CompanyId);
+            Assert.Equal("ABCD123", again.SiteName);
             Assert.Equal("10.0.0.9", again.DesignatedIp);
             Assert.Equal("architect", again.Role);
         }
@@ -182,7 +182,7 @@ public class TransferHistoryTests
                 SizeBytes = 599,
                 Accepted = true,
                 Message = "readings.csv sent to CIDCO",
-                CompanyId = "ABCD123",
+                SiteName = "ABCD123",
             });
         }
 

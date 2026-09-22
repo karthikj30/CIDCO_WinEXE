@@ -5,13 +5,13 @@
  * API half: different credentials, different dashboard, different transport.
  *
  *   1. A CIDCO officer registers the company by hand first — company name,
- *      company id, the architect's server address, and the file path their CSV
+ *      site name, the architect's server address, and the file path their CSV
  *      is taken from.
  *   2. CIDCO issues an SFTP user id and password against that record and emails
  *      it, along with the designated address to send to.
  *   3. The architect sends automatically, taking the CSV from the registered
  *      path and writing it to the same path here.
- *   4. EVERY transfer is validated against the company record: company id, the
+ *   4. EVERY transfer is validated against the company record: site name, the
  *      address it arrived from, and the path it was written to. Only when all
  *      three match is the file parsed and its readings stored.
  *

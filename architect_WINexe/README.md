@@ -103,7 +103,7 @@ Fill in the connection bar with what CIDCO emailed:
 | Designated IP | CIDCO's server address — the one in the email, e.g. `13.207.123.12`, or `http://13.207.123.12:8010` to use their web portal |
 | User ID | `cidco@example.com` |
 | Password | `123456` |
-| Company ID | `ABCD123` |
+| Site name | `ABCD123` |
 | File path | prefilled from the installer, e.g. `C:\CIDCO\exports` |
 | Private key | Leave blank for CIDCO. Needed for a server that will not take a password — see below |
 
@@ -159,13 +159,13 @@ The local export keeps its own name. The copy that goes over the wire is always
 renamed:
 
 ```
-<Company ID>_<dd_mm_yyyy>_<hh-mm-ss>_AQI.csv
+<Site name>_<dd_mm_yyyy>_<hh-mm-ss>_AQI.csv
 e.g.  ABCD123_21_09_2026_13-28-49_AQI.csv
 ```
 
-Company id, then the date as `dd_mm_yyyy`, then the time as `hh-mm-ss`, then
+Site name, then the date as `dd_mm_yyyy`, then the time as `hh-mm-ss`, then
 `_AQI.csv`. CIDCO's poll1 reads the company and the moment out of that name
-alone and files it as `<companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv`, which is why
+alone and files it as `<siteName>/<dd_mm_yyyy>/<hh-mm-ss>.csv`, which is why
 the shape is fixed. Two sends a second apart cannot overwrite each other.
 
 The time is hyphenated, never `11:30:24`. A colon is a reserved character in a
@@ -241,7 +241,7 @@ never written down.
 ### Sending to your own server, not CIDCO's
 
 **Name the destination folder in the address.** Without one the agent uses
-CIDCO's own layout, `/<companyId>/<file>`, which exists on CIDCO's intake and
+CIDCO's own layout, `/<siteName>/<file>`, which exists on CIDCO's intake and
 on no other machine — so every send is refused for a folder you never asked
 anyone to create:
 
@@ -302,7 +302,7 @@ out of the file name and files it as:
 
 ```
   <data root>/
-    ABCD123/                    the company id
+    ABCD123/                    the site name
       21_09_2026/               the day, dd_mm_yyyy
         13-28-49.csv            the time it was sent
 ```
@@ -311,7 +311,7 @@ out of the file name and files it as:
 
 Name a folder in the address and the agent behaves like any other SFTP client:
 it signs in with **that server's own login** — not CIDCO's — and writes the file
-straight into the folder, with none of CIDCO's `/<companyId>/<path>/` layout.
+straight into the folder, with none of CIDCO's `/<siteName>/<path>/` layout.
 
 ```
 13.207.123.12:22/home/ubuntu/uploads
@@ -354,7 +354,7 @@ gets back in, and every attempt, successful or not, is in the local history.
 CIDCO revalidates **every single transfer**, not just the first one, against the
 master row an officer created before any credentials were sent:
 
-- the **company id** from the upload path,
+- the **site name** from the upload path,
 - the **source IP** the connection actually came from,
 - the **file path** the agent declared.
 
@@ -363,7 +363,7 @@ so — and CIDCO records it as `REJECTED` with the reason, with not one reading
 stored.
 
 Accepted files land in the data table under
-`<companyId>/<dd_mm_yyyy>/<hh-mm-ss>.csv`, e.g.
+`<siteName>/<dd_mm_yyyy>/<hh-mm-ss>.csv`, e.g.
 `ABCD123/21_09_2026/07-25-06.csv`.
 
 ## Test exports
@@ -408,7 +408,7 @@ src/Cidco.Core/        the logic, with no window attached — and all of the tes
   Settings.cs            what the installer chose, and what the agent remembers
   SetupFlow.cs           which wizard step comes next, and the folder check
   CidcoSender.cs         the SFTP transfer itself
-  RemotePath.cs          /<companyId>/<folder>/<file>.csv, mirroring the server
+  RemotePath.cs          /<siteName>/<folder>/<file>.csv, mirroring the server
   ExportPicker.cs        finding the newest export
   AqiCsv.cs              the columns CIDCO reads
 src/Cidco.Agent/       the two WinForms screens, and the install itself
@@ -432,7 +432,7 @@ SQLite, at `%LOCALAPPDATA%\CIDCO-AQI-Agent\agent.db`:
 
 | Table | What it holds |
 | --- | --- |
-| `settings` | The export folder, the schedule, the designated IP, the company id — never the password |
+| `settings` | The export folder, the schedule, the designated IP, the site name — never the password |
 | `transfers` | Every attempt: file, remote path, size, accepted or refused, CIDCO's message, when |
 
 This is the architect's own record, on their own PC. It is not CIDCO's database

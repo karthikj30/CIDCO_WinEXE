@@ -131,7 +131,7 @@ public sealed class Database : IDisposable
         command.Parameters.AddWithValue("$size", record.SizeBytes);
         command.Parameters.AddWithValue("$accepted", record.Accepted ? 1 : 0);
         command.Parameters.AddWithValue("$message", record.Message);
-        command.Parameters.AddWithValue("$company", record.CompanyId);
+        command.Parameters.AddWithValue("$company", record.SiteName);
         command.Parameters.AddWithValue("$sentAt", record.SentAt.ToString("o"));
         command.Parameters.AddWithValue("$outcome", record.Outcome.ToString());
         return (long)(command.ExecuteScalar() ?? 0L);
@@ -159,7 +159,7 @@ public sealed class Database : IDisposable
                 SizeBytes = reader.GetInt64(3),
                 Accepted = reader.GetInt64(4) != 0,
                 Message = reader.GetString(5),
-                CompanyId = reader.GetString(6),
+                SiteName = reader.GetString(6),
                 SentAt = DateTimeOffset.Parse(reader.GetString(7)),
                 Outcome = Enum.TryParse<TransferOutcome>(reader.GetString(8), out var outcome)
                     ? outcome
@@ -192,7 +192,7 @@ public sealed class TransferRecord
     public long SizeBytes { get; init; }
     public bool Accepted { get; init; }
     public string Message { get; init; } = "";
-    public string CompanyId { get; init; } = "";
+    public string SiteName { get; init; } = "";
     public DateTimeOffset SentAt { get; init; } = DateTimeOffset.Now;
     public TransferOutcome Outcome { get; init; } = TransferOutcome.Sent;
 

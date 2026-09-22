@@ -7,7 +7,7 @@ import { hashPassword } from './auth';
  *
  * Architects do not get an account each. They sign in here, then identify their
  * company with the SFTP user id and password CIDCO issued them — that pair is
- * the per-company identity, and it is what every transfer is validated against.
+ * the per-site nameentity, and it is what every transfer is validated against.
  *
  * It also owns the rows the SFTP channel writes, since an SFTP reading belongs
  * to a registered company rather than to a person; `Report.companyRecordId`

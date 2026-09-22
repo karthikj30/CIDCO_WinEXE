@@ -8,7 +8,7 @@ namespace Cidco.Core;
 ///
 /// The agent runs unattended, so it has to decide on its own whether trying
 /// again could possibly help. Losing the network is worth waiting out; a
-/// password CIDCO rejected, or a company id they do not recognise, will fail
+/// password CIDCO rejected, or a site name they do not recognise, will fail
 /// exactly the same way forever and needs a person.
 /// </summary>
 public enum TransferOutcome
@@ -58,7 +58,7 @@ public sealed class CidcoSender : ICidcoTransport
     public int Port { get; }
     public string Username { get; }
     private readonly string _password;
-    public string CompanyId { get; }
+    public string SiteName { get; }
     public string CsvFolder { get; }
     public TimeSpan Timeout { get; }
 
@@ -66,7 +66,7 @@ public sealed class CidcoSender : ICidcoTransport
     /// A folder to upload into on an ordinary SFTP server.
     ///
     /// Empty for CIDCO, whose intake works out where a file belongs from the
-    /// company id and the declared path. Set when the architect named a folder
+    /// site name and the declared path. Set when the architect named a folder
     /// in the address, which points the agent at a plain server instead.
     /// </summary>
     public string RemoteDirectory { get; init; } = "";
@@ -94,7 +94,7 @@ public sealed class CidcoSender : ICidcoTransport
         int port,
         string username,
         string password,
-        string companyId,
+        string siteName,
         string csvFolder,
         TimeSpan? timeout = null)
     {
@@ -102,7 +102,7 @@ public sealed class CidcoSender : ICidcoTransport
         Port = port;
         Username = username.Trim();
         _password = password;
-        CompanyId = companyId.Trim();
+        SiteName = siteName.Trim();
         CsvFolder = csvFolder.Trim();
         Timeout = timeout ?? TimeSpan.FromSeconds(20);
     }
@@ -110,19 +110,19 @@ public sealed class CidcoSender : ICidcoTransport
     /// <summary>Where this is sending, for the status line.</summary>
     public string Describe => IsPlainSftp
         ? $"{Host}:{Port}{RemoteDirectory} (plain SFTP \u2014 not CIDCO)"
-        : $"{CompanyId} \u2192 {Host}:{Port}";
+        : $"{SiteName} \u2192 {Host}:{Port}";
 
     public static CidcoSender From(Settings settings) => new(
         settings.IpOrDefault,
         settings.PortOrDefault,
         settings.UsernameOrDefault,
         settings.Password,
-        settings.CompanyIdOrDefault,
+        settings.SiteNameOrDefault,
         settings.CsvFolder);
 
     /// <summary>The same sender pointed at a different port.</summary>
     public CidcoSender On(int port) =>
-        new(Host, port, Username, _password, CompanyId, CsvFolder, Timeout)
+        new(Host, port, Username, _password, SiteName, CsvFolder, Timeout)
         {
             RemoteDirectory = RemoteDirectory,
             PrivateKeyPath = PrivateKeyPath,
@@ -142,7 +142,7 @@ public sealed class CidcoSender : ICidcoTransport
         ServerAddress address,
         string username,
         string password,
-        string companyId,
+        string siteName,
         string csvFolder,
         TimeSpan? timeout = null,
         string privateKeyPath = "")
@@ -153,7 +153,7 @@ public sealed class CidcoSender : ICidcoTransport
 
         foreach (var port in ports)
         {
-            var sender = new CidcoSender(address.Host, port, username, password, companyId, csvFolder, timeout)
+            var sender = new CidcoSender(address.Host, port, username, password, siteName, csvFolder, timeout)
             {
                 PrivateKeyPath = privateKeyPath,
             };
@@ -376,15 +376,15 @@ public sealed class CidcoSender : ICidcoTransport
                 TransferOutcome.NothingToSend) with { FileName = source.Name };
 
         // Any local name is fine; the remote name is always
-        // companyId_timestamp_AQI.csv so CIDCO can parse it without the export
+        // siteName_timestamp_AQI.csv so CIDCO can parse it without the export
         // name. The agent never creates folders — only drops the renamed file
         // into a path that already exists (or into CIDCO's intake when no
         // plain folder was named).
         var sentAt = DateTimeOffset.Now;
-        var remoteName = RemotePath.AqiFileName(CompanyId, sentAt);
+        var remoteName = RemotePath.AqiFileName(SiteName, sentAt);
         var target = IsPlainSftp
-            ? RemotePath.IntoFolder(RemoteDirectory, CompanyId, sentAt)
-            : RemotePath.For(CompanyId, remoteName);
+            ? RemotePath.IntoFolder(RemoteDirectory, SiteName, sentAt)
+            : RemotePath.For(SiteName, remoteName);
         var parent = RemotePath.ParentOf(target);
 
         SftpClient client;
@@ -449,7 +449,7 @@ public sealed class CidcoSender : ICidcoTransport
             SizeBytes = result.SizeBytes,
             Accepted = result.Ok,
             Message = result.Message,
-            CompanyId = CompanyId,
+            SiteName = SiteName,
             SentAt = result.SentAt,
             Outcome = result.Outcome,
         });
@@ -617,7 +617,7 @@ public sealed class CidcoSender : ICidcoTransport
     /// <summary>
     /// The technical reason, and nothing more.
     ///
-    /// This used to append "check the company id, the designated IP and the
+    /// This used to append "check the site name, the designated IP and the
     /// file path with CIDCO" to every permission denial. On CIDCO's intake
     /// that is the advice; on an architect's own server CIDCO has no part in
     /// it, and sending someone to ask CIDCO about their own AWS box is worse

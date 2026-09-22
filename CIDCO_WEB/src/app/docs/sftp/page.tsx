@@ -54,7 +54,7 @@ export default function SftpDocs() {
         <div className="mt-6 rounded-xl border border-violet-200 bg-violet-50 p-5 text-sm text-violet-900">
           <p className="font-semibold">CIDCO validates every single transfer</p>
           <p className="mt-1">
-            Before you get any credentials, CIDCO registers your company by hand — your company id,
+            Before you get any credentials, CIDCO registers your company by hand — your site name,
             your server&rsquo;s IP address, and the file path your CSV is exported to. On every transfer
             those three are compared against that registration. If any one of them does not match, the
             file is refused and <strong>nothing is stored</strong>.
@@ -64,10 +64,10 @@ export default function SftpDocs() {
         <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="text-lg font-bold text-slate-900">The flow at a glance</h2>
           <ol className="mt-3 space-y-2 text-sm text-slate-700">
-            <li><strong>i. CIDCO registers your company</strong> — company name, company id, your server&rsquo;s IP address, and the file path your CSV is taken from. This happens before any credentials exist.</li>
+            <li><strong>i. CIDCO registers your company</strong> — company name, site name, your server&rsquo;s IP address, and the file path your CSV is taken from. This happens before any credentials exist.</li>
             <li><strong>1. CIDCO emails you</strong> a user id, a password and the <strong>designated IP address</strong> to send to.</li>
             <li><strong>2. You send automatically</strong> — your server takes the CSV from the registered path and puts it on the designated address, on a schedule.</li>
-            <li><strong>✓ CIDCO validates the transfer</strong> — company id, the address it came from, and the file path, all against the registration. Only then are the readings stored.</li>
+            <li><strong>✓ CIDCO validates the transfer</strong> — site name and file path, both against the registration. Only then are the readings stored.</li>
             <li><strong>Both sides see the result</strong> — the comparison field by field, how many rows became readings, and which rows were rejected and why.</li>
           </ol>
           <p className="mt-3 text-xs text-slate-500">
@@ -90,10 +90,9 @@ export default function SftpDocs() {
             <Code>{`sftp -P 2222 <your user id>@<designated IP>
 # password: the one CIDCO emailed you`}</Code>
             <p>
-              Password is the only accepted authentication method, and the connection must come from the
-              server address CIDCO registered for you — a connection from anywhere else is refused at
-              login, and CIDCO sees the attempt. Connecting drops you straight into your registered file
-              path, so a bare <code className={K}>put readings.csv</code> lands in the right place.
+              Password is the only accepted authentication method. Connecting drops you straight into
+              your registered file path, so a bare <code className={K}>put readings.csv</code> lands in
+              the right place.
             </p>
             <p className="text-xs text-slate-500">
               Your exact designated IP, port, user id and file path are on your dashboard at{' '}
@@ -182,7 +181,7 @@ npx tsx scripts/architect-sender.ts`}</Code>
               anything else is refused at the open. Files up to 25 MB are taken.
             </p>
             <p>
-              <strong>CIDCO validates first.</strong> Your company id, the address the transfer came from,
+              <strong>CIDCO validates first.</strong> Your site name, the address the transfer came from,
               and the path it was written to are each compared against your registration. Any mismatch and
               the transfer is marked <code className={K}>REJECTED</code> — nothing is parsed, nothing is
               stored — with the failing field named on both dashboards.

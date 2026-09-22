@@ -1,7 +1,7 @@
 /**
  * End-to-end drive of the SFTP channel, in the order CIDCO actually works:
  *
- *   i.  CIDCO registers the company by hand — name, company id, the architect's
+ *   i.  CIDCO registers the company by hand — name, site name, the architect's
  *       server address, and the file path their CSV is taken from.
  *   1.  CIDCO issues a user id and password against it and emails them, with
  *       the designated address to send to.
@@ -139,7 +139,7 @@ async function main() {
   const cred = issued.json.data.credential;
   check(
     ['username', 'password', 'designatedIp', 'siteName', 'filePath'].every((k) => k in cred),
-    'the emailed bundle carries the user id, password, designated IP, company id and file path',
+    'the emailed bundle carries the user id, password, designated IP, site name and file path',
   );
   console.log(`   ${cred.username} → ${cred.designatedIp}:${cred.port}${cred.filePath}`);
 
@@ -162,14 +162,14 @@ async function main() {
   const row = list.json.data.uploads.find((u: { presentedSiteName: string | null }) => u.presentedSiteName === siteName);
   check(!!row, 'the transfer is on the CIDCO dashboard');
   check(row?.validationPassed === true, 'validation passed');
-  check(row?.siteNameMatch && row?.ipMatch && row?.pathMatch, 'company id, IP and file path all matched');
+  check(row?.siteNameMatch && row?.ipMatch && row?.pathMatch, 'site name, IP and file path all matched');
   check(row?.presentedPath === FILE_PATH, `the path it was taken from is recorded (${row?.presentedPath})`);
   check(row?.presentedIp === ARCHITECT_IP, `the address it came from is recorded (${row?.presentedIp})`);
   check(row?.importedCount === 3 && row?.rowCount === 4, `3 of 4 CSV rows stored (got ${row?.importedCount} of ${row?.rowCount})`);
 
   const detail = await api(`/api/admin/sftp/uploads/${row.id}`);
   const v = detail.json.data.upload.validation;
-  check(v.siteName.presented === siteName && v.siteName.expected === siteName, 'the officer sees company id, incoming vs registered');
+  check(v.siteName.presented === siteName && v.siteName.expected === siteName, 'the officer sees site name, incoming vs registered');
   check(v.ip.presented === ARCHITECT_IP && v.ip.expected === ARCHITECT_IP, 'the officer sees the IP, incoming vs registered');
   check(v.filePath.presented === FILE_PATH && v.filePath.expected === FILE_PATH, 'the officer sees the file path, incoming vs registered');
   check(detail.json.data.upload.rows.length === 4, 'the CSV is previewable row by row');

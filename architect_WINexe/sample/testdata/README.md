@@ -5,7 +5,7 @@ them produces no diff unless the generator changed.
 
 These stand in for what an architect's monitoring software drops into the
 export folder. The names are deliberately inconsistent: the agent has to take
-any `.csv` name and rename it to `companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv` on
+any `.csv` name and rename it to `siteName_dd_mm_yyyy_hh-mm-ss_AQI.csv` on
 the way out, so a name that only worked because it was tidy would pass
 unnoticed without these.
 

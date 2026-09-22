@@ -11,15 +11,15 @@ import { normaliseReadingFields, reportSchema } from './validation';
 /**
  * The SFTP delivery channel.
  *
- * CIDCO registers the company by hand first — company name, company id, the
- * architect's server address and the file path their CSV is taken from — and
+ * CIDCO registers the company by hand first — the site name and the file
+ * path their CSV is taken from — and
  * only then issues an SFTP user id and password against that record, emailing
  * it with the designated address to send to.
  *
  * From then on the architect sends automatically. **Every single transfer is
- * validated on the CIDCO side**: the company id, the address it arrived from
- * and the path it was taken from are compared against what CIDCO registered.
- * Only when all three match is the file parsed and its readings stored.
+ * validated on the CIDCO side**: the site name and the path it was taken
+ * from are compared against what CIDCO registered.
+ * Only when both match is the file parsed and its readings stored.
  */
 
 // --- Workbook shape --------------------------------------------------------
@@ -301,7 +301,7 @@ export function comparablePath(value: string | null | undefined) {
 }
 
 /**
- * The check CIDCO runs on every transfer: does the company id and (when
+ * The check CIDCO runs on every transfer: does the site name and (when
  * registered) the path it was taken from match what CIDCO registered?
  *
  * The address the file came from used to be part of this. It is not recorded
@@ -679,7 +679,7 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-/** Keeps a company id usable as a single folder name. */
+/** Keeps a site name usable as a single folder name. */
 export function safeFolder(value: string) {
   return value.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80) || 'unknown';
 }

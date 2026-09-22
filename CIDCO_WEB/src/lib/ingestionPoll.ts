@@ -50,10 +50,10 @@ export type IngestionStepResult = {
  *
  *   ABCD123_21_09_2026_11-30-24_AQI.csv
  *
- * Company id, date as dd_mm_yyyy, time as hh-mm-ss. It arrives flat because
+ * Site name, date as dd_mm_yyyy, time as hh-mm-ss. It arrives flat because
  * the agent may not create folders; poll1 takes it apart and builds the tree.
  *
- * The company id is matched non-greedily up to the date, so an id that itself
+ * The site name is matched non-greedily up to the date, so an id that itself
  * contains underscores still parses.
  */
 const AQI_FILE_RE =
@@ -267,7 +267,7 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
       }
 
       let company = await prisma.company.findUnique({ where: { siteName: parsed.siteName } });
-      // Even without a registration, still file under the company id from the name.
+      // Even without a registration, still file under the site name from the name.
       if (!company) {
         const owner = await sharedLoginHandshake();
         company = await prisma.company.create({

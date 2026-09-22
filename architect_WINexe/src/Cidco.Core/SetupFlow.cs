@@ -101,7 +101,7 @@ public sealed class SetupFlow
         CsvFolder = CsvFolder.Trim(),
         IntervalSeconds = Schedule.SecondsFor(IntervalLabel),
         Username = Settings.Defaults.Username,
-        CompanyId = Settings.Defaults.CompanyId,
+        SiteName = Settings.Defaults.SiteName,
         Port = Settings.Defaults.Port,
     };
 }

@@ -4,9 +4,9 @@ using Xunit;
 namespace Cidco.Core.Tests;
 
 /// <summary>
-/// Every CSV is renamed to companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv before upload.
+/// Every CSV is renamed to siteName_dd_mm_yyyy_hh-mm-ss_AQI.csv before upload.
 /// The agent never builds a folder tree — CIDCO's poll1 takes this name apart
-/// and files it as &lt;companyId&gt;/&lt;dd_mm_yyyy&gt;/&lt;hh-mm-ss&gt;.csv.
+/// and files it as &lt;siteName&gt;/&lt;dd_mm_yyyy&gt;/&lt;hh-mm-ss&gt;.csv.
 /// </summary>
 public class AqiFileNameTests
 {

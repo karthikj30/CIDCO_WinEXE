@@ -35,7 +35,7 @@ public sealed class PortalSender : ICidcoTransport
     public Uri BaseAddress { get; }
     public string Username { get; }
     private readonly string _password;
-    public string CompanyId { get; }
+    public string SiteName { get; }
     public string CsvFolder { get; }
     public TimeSpan Timeout { get; }
 
@@ -43,14 +43,14 @@ public sealed class PortalSender : ICidcoTransport
         Uri baseAddress,
         string username,
         string password,
-        string companyId,
+        string siteName,
         string csvFolder,
         TimeSpan? timeout = null)
     {
         BaseAddress = baseAddress;
         Username = username.Trim();
         _password = password;
-        CompanyId = companyId.Trim();
+        SiteName = siteName.Trim();
         CsvFolder = csvFolder.Trim();
         Timeout = timeout ?? TimeSpan.FromSeconds(30);
     }
@@ -58,7 +58,7 @@ public sealed class PortalSender : ICidcoTransport
     public Uri UploadUri => new(BaseAddress, UploadPath);
 
     /// <summary>Where this is sending, for the status line.</summary>
-    public string Describe => $"{CompanyId} \u2192 {Where} (web portal)";
+    public string Describe => $"{SiteName} \u2192 {Where} (web portal)";
 
     private string Where => $"{BaseAddress.Host}:{BaseAddress.Port}";
 
@@ -105,9 +105,9 @@ public sealed class PortalSender : ICidcoTransport
             return SendResult.Failed($"{source.Name} is not a .csv file", TransferOutcome.NothingToSend)
                 with { FileName = source.Name };
 
-        // Same rename rule as SFTP: companyId_timestamp_AQI.csv regardless of
+        // Same rename rule as SFTP: siteName_timestamp_AQI.csv regardless of
         // the local export name.
-        var remoteName = RemotePath.AqiFileName(CompanyId, DateTimeOffset.Now);
+        var remoteName = RemotePath.AqiFileName(SiteName, DateTimeOffset.Now);
 
         byte[] bytes;
         try
@@ -132,7 +132,7 @@ public sealed class PortalSender : ICidcoTransport
 
             AddField(content, "username", Username);
             AddField(content, "password", _password);
-            AddField(content, "companyId", CompanyId);
+            AddField(content, "siteName", SiteName);
             // The folder the CSV was taken from, which CIDCO checks against the
             // path they registered — the same value the SFTP upload carries
             // inside its remote path.
@@ -210,7 +210,7 @@ public sealed class PortalSender : ICidcoTransport
             SizeBytes = result.SizeBytes,
             Accepted = result.Ok,
             Message = result.Message,
-            CompanyId = CompanyId,
+            SiteName = SiteName,
             SentAt = result.SentAt,
             Outcome = result.Outcome,
         });

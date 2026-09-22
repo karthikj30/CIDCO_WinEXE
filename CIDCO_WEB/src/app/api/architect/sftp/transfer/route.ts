@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       const fromName = parseAqiFileName(file.name)?.siteName;
       const siteName = declaredCompanyId || fromName;
       if (!siteName) {
-        return fail('Send your company id alongside the file when using the shared CIDCO login', 422);
+        return fail('Send your site name alongside the file when using the shared CIDCO login', 422);
       }
 
       const named = await prisma.company.findUnique({ where: { siteName } });

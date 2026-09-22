@@ -6,9 +6,9 @@ namespace Cidco.Core.Tests;
 /// <summary>
 /// The upload path CIDCO's own intake receives:
 ///
-///     /&lt;companyId&gt;/&lt;the renamed file&gt;
+///     /&lt;siteName&gt;/&lt;the renamed file&gt;
 ///
-/// The company id and the file, and nothing else. In particular not the folder
+/// The site name and the file, and nothing else. In particular not the folder
 /// the CSV came off, which is a fact about the architect's PC.
 /// </summary>
 public class RemotePathTests

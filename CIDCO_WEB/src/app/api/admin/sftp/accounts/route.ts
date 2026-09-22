@@ -130,12 +130,12 @@ export async function POST(req: NextRequest) {
     }
     if (!company.active) return fail('That company registration is inactive', 409);
 
-    // SFTP user id = the company id CIDCO registered (e.g. test03).
+    // SFTP user id = the site name CIDCO registered (e.g. test03).
     const username = company.siteName;
     const taken = await prisma.architectHandshake.findUnique({ where: { clientId: username } });
     if (taken) {
       return fail(
-        `SFTP credentials already exist for company id "${username}". Revoke the old account first if you need to re-issue.`,
+        `SFTP credentials already exist for site name "${username}". Revoke the old account first if you need to re-issue.`,
         409,
       );
     }

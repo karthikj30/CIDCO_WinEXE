@@ -30,7 +30,7 @@ public static class AqiCsv
 
     /// <summary>
     /// The file types the agent sends. CSV only, and deliberately so: every
-    /// upload is renamed to companyId_timestamp_AQI.csv, so sending a
+    /// upload is renamed to siteName_timestamp_AQI.csv, so sending a
     /// spreadsheet would hand CIDCO a binary .xlsx wearing a .csv name. It
     /// would pass CIDCO's file-type check and fail its column check, which is
     /// the worst of both — so the agent refuses it here, where the message can

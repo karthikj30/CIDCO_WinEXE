@@ -189,7 +189,7 @@ export default function ArchitectSftpWorkspace() {
               {account ? 'Connected' : 'Connect to CIDCO'}
             </h2>
             <p className="text-xs text-slate-500">
-              Use the company id CIDCO registered (e.g. <span className="font-mono">test03</span>) as
+              Use the site name CIDCO registered (e.g. <span className="font-mono">test03</span>) as
               your user id, and password <span className="font-mono">123456</span> (same as the portal
               login).
             </p>
@@ -254,9 +254,9 @@ export default function ArchitectSftpWorkspace() {
           <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <p className="text-sm font-medium text-slate-900">Not connected yet</p>
             <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">
-              CIDCO registers your company first — the company id, your server address and the path your
-              CSV is exported to — then issues SFTP access using that company id as the user id.
-              Enter the company id above with password <span className="font-mono">123456</span> to
+              CIDCO registers your company first — the site name and the path your
+              CSV is exported to — then issues SFTP access using that site name as the user id.
+              Enter the site name above with password <span className="font-mono">123456</span> to
               connect.
             </p>
           </div>
@@ -383,7 +383,7 @@ sftp> put ${account.company.designatedPath}/readings.csv ${account.company.desig
 
                       <p className="mt-2 flex flex-wrap gap-3 text-[11px]">
                         <span className={u.siteNameMatch ? 'text-emerald-700' : 'text-red-700'}>
-                          {u.siteNameMatch ? '✓' : '✕'} company id {u.presentedSiteName ?? '—'}
+                          {u.siteNameMatch ? '✓' : '✕'} site name {u.presentedSiteName ?? '—'}
                         </span>
                         <span className={u.ipMatch ? 'text-emerald-700' : 'text-red-700'}>
                           {u.ipMatch ? '✓' : '✕'} from {u.presentedIp ?? '—'}

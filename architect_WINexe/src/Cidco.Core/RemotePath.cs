@@ -6,10 +6,10 @@ namespace Cidco.Core;
 /// The agent signs in with the one CIDCO username and password, so the upload
 /// path is what tells CIDCO which company is sending:
 ///
-///     /&lt;companyId&gt;/&lt;the folder the CSV was taken from&gt;/&lt;companyId&gt;_&lt;timestamp&gt;_AQI.csv
+///     /&lt;siteName&gt;/&lt;the folder the CSV was taken from&gt;/&lt;siteName&gt;_&lt;timestamp&gt;_AQI.csv
 ///
 /// The local export may be named anything (e.g. readings.csv); before upload it
-/// is always renamed to companyId_timestamp_AQI.csv so CIDCO's poll handlers
+/// is always renamed to siteName_timestamp_AQI.csv so CIDCO's poll handlers
 /// can parse company and time from the file name alone.
 ///
 /// The agent never creates folders on the server — that is CIDCO's job. It only
@@ -31,14 +31,14 @@ public static class RemotePath
     ///
     ///     ABCD123_21_09_2026_11-30-24_AQI.csv
     ///
-    /// Company id, then the date as dd_mm_yyyy, then the time as hh-mm-ss,
+    /// Site name, then the date as dd_mm_yyyy, then the time as hh-mm-ss,
     /// then the AQI suffix. The original export name is discarded on purpose.
     ///
     /// It is one flat name rather than a folder path because the agent is not
     /// allowed to create folders on the server. Everything CIDCO needs to file
     /// it — the company and the moment — therefore has to travel in the name,
     /// and poll1 takes it apart again to build
-    /// &lt;companyId&gt;/&lt;dd_mm_yyyy&gt;/&lt;hh-mm-ss&gt;.csv on CIDCO's side.
+    /// &lt;siteName&gt;/&lt;dd_mm_yyyy&gt;/&lt;hh-mm-ss&gt;.csv on CIDCO's side.
     ///
     /// The time is hyphenated, not "11:30:24". A colon is a reserved character
     /// in a Windows file name — NTFS reads "11:30:24.csv" as an alternate data
@@ -46,9 +46,9 @@ public static class RemotePath
     /// colon-named file could not save it. Linux accepts it; Windows is the
     /// side that breaks, and both sides have to be able to hold this file.
     /// </summary>
-    public static string AqiFileName(string companyId, DateTimeOffset at)
+    public static string AqiFileName(string siteName, DateTimeOffset at)
     {
-        var company = companyId.Trim().Trim('/');
+        var company = siteName.Trim().Trim('/');
         if (company.Length == 0) company = "UNKNOWN";
         return $"{company}_{DateFolder(at)}_{TimeStem(at)}_AQI.csv";
     }
@@ -66,7 +66,7 @@ public static class RemotePath
     ///
     ///     /ABCD123/ABCD123_21_09_2026_11-30-24_AQI.csv
     ///
-    /// The company id, then the renamed file. Nothing else.
+    /// The site name, then the renamed file. Nothing else.
     ///
     /// It used to carry the folder the CSV was taken from as well, because the
     /// intake read the company and the source path out of the upload path. It
@@ -80,9 +80,9 @@ public static class RemotePath
     /// which is a path on nobody's server. A local folder is a fact about the
     /// architect's PC and has no business in a remote path.
     /// </summary>
-    public static string For(string companyId, string fileName)
+    public static string For(string siteName, string fileName)
     {
-        var company = companyId.Trim().Trim('/');
+        var company = siteName.Trim().Trim('/');
         var name = FileNameOnly(fileName);
 
         var parts = new[] { company, name }.Where(p => p.Length > 0);
@@ -108,8 +108,8 @@ public static class RemotePath
     /// the renamed AQI file. No company/month/date tree — the agent must not
     /// create folders; CIDCO's poll1 builds that layout after intake.
     /// </summary>
-    public static string IntoFolder(string remoteDirectory, string companyId, DateTimeOffset at) =>
-        Join(remoteDirectory, AqiFileName(companyId, at));
+    public static string IntoFolder(string remoteDirectory, string siteName, DateTimeOffset at) =>
+        Join(remoteDirectory, AqiFileName(siteName, at));
 
     /// <summary>
     /// Parent directory of a remote file path, or empty when the file sits at root.

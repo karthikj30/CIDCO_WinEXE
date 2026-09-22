@@ -67,7 +67,7 @@ public class LiveServerTests
     {
         Assert.StartsWith(company + "_", name);
         Assert.EndsWith("_AQI.csv", name);
-        // companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv
+        // siteName_dd_mm_yyyy_hh-mm-ss_AQI.csv
         Assert.Matches(@"^.+_\d{2}_\d{2}_\d{4}_\d{2}-\d{2}-\d{2}_AQI\.csv$", name);
         // Never a colon: NTFS would read it as an alternate data stream.
         Assert.DoesNotContain(":", name);
@@ -82,7 +82,7 @@ public class LiveServerTests
         var result = Sender().Send(file);
 
         Assert.True(result.Ok, result.Message);
-        // readings.csv on disk, companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv on the wire.
+        // readings.csv on disk, siteName_dd_mm_yyyy_hh-mm-ss_AQI.csv on the wire.
         AssertAqiName(result.FileName, Company);
         // The company and the file, and nothing else. The folder the export
         // was taken from is a fact about this PC and stays on it.
@@ -118,7 +118,7 @@ public class LiveServerTests
         var row = Assert.Single(db.RecentTransfers());
         Assert.True(row.Accepted);
         AssertAqiName(row.FileName, Company);
-        Assert.Equal(Company, row.CompanyId);
+        Assert.Equal(Company, row.SiteName);
         Assert.Equal(result.Remote, row.RemotePath);
         Assert.Equal((1, 0), db.TransferTally());
     }

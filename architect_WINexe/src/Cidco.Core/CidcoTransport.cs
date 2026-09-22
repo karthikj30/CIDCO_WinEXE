@@ -38,7 +38,7 @@ public static class CidcoTransports
         ServerAddress address,
         string username,
         string password,
-        string companyId,
+        string siteName,
         string csvFolder,
         TimeSpan? timeout = null,
         string privateKeyPath = "")
@@ -46,7 +46,7 @@ public static class CidcoTransports
         if (address.IsPortal)
         {
             var portal = new PortalSender(
-                address.PortalBase(), username, password, companyId, csvFolder,
+                address.PortalBase(), username, password, siteName, csvFolder,
                 timeout ?? TimeSpan.FromSeconds(30));
             return (portal, portal.CheckConnection());
         }
@@ -56,7 +56,7 @@ public static class CidcoTransports
             // A folder was named, so this is an ordinary SFTP server. There is
             // no intake to search for and no company to scope the path to.
             var plain = new CidcoSender(address.Host, address.Port, username, password,
-                companyId, csvFolder, timeout)
+                siteName, csvFolder, timeout)
             {
                 RemoteDirectory = address.RemoteDirectory,
                 PrivateKeyPath = privateKeyPath,
@@ -65,7 +65,7 @@ public static class CidcoTransports
         }
 
         var (sftp, result) = CidcoSender.FindIntake(
-            address, username, password, companyId, csvFolder, timeout, privateKeyPath);
+            address, username, password, siteName, csvFolder, timeout, privateKeyPath);
         return (sftp, result);
     }
 }

@@ -98,8 +98,8 @@ export async function GET(req: NextRequest) {
  * POST /api/admin/sftp/companies
  *
  * Step one of the SFTP channel, done by hand by a CIDCO officer before any
- * credentials exist: register the company name, the company id, the
- * architect's own server address, and the file path their CSV is taken from.
+ * credentials exist: register the company name, the site name, the
+ * and the file path their CSV is taken from.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     const data = companySchema.parse(await req.json());
 
     const existing = await prisma.company.findUnique({ where: { siteName: data.siteName } });
-    if (existing) return fail(`Company id "${data.siteName}" is already registered`, 409);
+    if (existing) return fail(`Site name "${data.siteName}" is already registered`, 409);
 
     const company = await prisma.company.create({
       data: {

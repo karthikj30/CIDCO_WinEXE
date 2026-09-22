@@ -11,9 +11,9 @@ import { readJson } from '@/lib/fetchJson';
  * Dragging a file from left to right (or dropping one straight in) sends it.
  *
  * Sending goes through the portal, which runs the file through exactly the same
- * validation and intake as a direct SFTP upload: the company id, the address it
- * came from and the file path are all checked against the company registration
- * before a single reading is stored.
+ * validation and intake as a direct SFTP upload: the site name and the file
+ * path are checked against the company registration before a single reading
+ * is stored.
  */
 type Delivered = {
   id: string;
@@ -209,7 +209,7 @@ export default function FileTransferPanes({
           className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
         />
         <p className="mt-2 text-xs text-slate-500">
-          CIDCO checks all three — your company id, the address this comes from, and this file path —
+          CIDCO checks both — your site name and this file path —
           against your registration on every transfer.
         </p>
       </div>

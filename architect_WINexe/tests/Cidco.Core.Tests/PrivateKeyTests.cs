@@ -212,7 +212,7 @@ public class LivePrivateKeyTests
 /// <summary>
 /// Limited write access: the agent checks that the named folder exists and
 /// refuses to create one. Files are renamed to
-/// companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv.
+/// siteName_dd_mm_yyyy_hh-mm-ss_AQI.csv.
 /// </summary>
 public class LivePathCheckTests
 {
@@ -287,7 +287,7 @@ public class LivePathCheckTests
         // It is their own server. CIDCO has no part in it, and the advice that
         // belongs on CIDCO's intake would send them to the wrong people.
         Assert.DoesNotContain("CIDCO", result.Message);
-        Assert.DoesNotContain("company id", result.Message);
+        Assert.DoesNotContain("site name", result.Message);
 
         // Something to actually do.
         Assert.Contains("chown", result.Message);
@@ -311,7 +311,7 @@ public class LivePathCheckTests
         // the file has to be openable on both sides.
         Assert.DoesNotContain(":", result.Remote[(result.Remote.LastIndexOf('/') + 1)..]);
         // One flat name, dropped in the folder the architect named — the agent
-        // does not build companyId/dd_mm_yyyy/ itself.
+        // does not build siteName/dd_mm_yyyy/ itself.
         Assert.Equal(Base, RemotePath.ParentOf(result.Remote));
     }
 

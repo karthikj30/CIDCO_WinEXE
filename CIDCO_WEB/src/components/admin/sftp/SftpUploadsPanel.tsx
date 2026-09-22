@@ -63,7 +63,7 @@ const UPLOAD_STATUS: Record<string, string> = {
  */
 function ValidationTable({ validation }: { validation: Detail['validation'] }) {
   const rows: Array<[string, Field]> = [
-    ['Company id', validation.siteName],
+    ['Site name', validation.siteName],
     ['Designated path', validation.designatedPath],
   ];
   return (
@@ -188,7 +188,7 @@ export default function SftpUploadsPanel() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Delivered transfers</h2>
           <p className="mt-1 text-sm text-slate-500">
             Every file architects have sent over SFTP. Each one is validated against the company CIDCO
-            registered — company id, server address and file path — and only stored if all three match.
+            registered — site name and file path — and only stored if both match.
             Open a transfer to see that comparison and preview the file as it arrived.
           </p>
         </div>
@@ -246,7 +246,7 @@ export default function SftpUploadsPanel() {
                   </p>
                   <p className="mt-1 flex flex-wrap gap-2 text-[11px]">
                     <span className={u.siteNameMatch ? 'text-emerald-700' : 'text-red-700'}>
-                      {u.siteNameMatch ? '✓' : '✕'} company id
+                      {u.siteNameMatch ? '✓' : '✕'} site name
                     </span>
                     <span className={u.pathMatch ? 'text-emerald-700' : 'text-red-700'}>
                       {u.pathMatch ? '✓' : '✕'} file path

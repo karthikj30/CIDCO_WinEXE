@@ -29,7 +29,7 @@ internal sealed class AgentWindow : Form
     private readonly TextBox _ip = new();
     private readonly TextBox _username = new();
     private readonly TextBox _password = new();
-    private readonly TextBox _company = new();
+    private readonly TextBox _site = new();
     private readonly TextBox _folder = new();
     private readonly TextBox _keyPath = new();
 
@@ -92,7 +92,7 @@ internal sealed class AgentWindow : Form
             ("Designated IP  (CIDCO's address)", _ip, 186),
             ("User ID", _username, 170),
             ("Password", _password, 120),
-            ("Company ID", _company, 110),
+            ("Site name", _site, 110),
         };
 
         var x = 14;
@@ -265,7 +265,7 @@ internal sealed class AgentWindow : Form
         // which is not an address at all.
         _ip.Text = _settings.IpOrDefault;
         _username.Text = _settings.UsernameOrDefault;
-        _company.Text = _settings.CompanyIdOrDefault;
+        _site.Text = _settings.SiteNameOrDefault;
         _folder.Text = _settings.CsvFolder;
         _keyPath.Text = _settings.PrivateKeyPath;
         _scheduleText.Text = $"Automatic sending is off · {Schedule.Describe(_settings.IntervalSeconds)}";
@@ -300,7 +300,7 @@ internal sealed class AgentWindow : Form
             port,
             _username.Text.Trim(),
             _password.Text,
-            _company.Text,
+            _site.Text,
             _folder.Text.Trim())
         {
             PrivateKeyPath = _keyPath.Text.Trim(),
@@ -420,7 +420,7 @@ internal sealed class AgentWindow : Form
                 address,
                 _username.Text.Trim(),
                 _password.Text,
-                _company.Text.Trim(),
+                _site.Text.Trim(),
                 _folder.Text.Trim(),
                 timeout: null,
                 privateKeyPath: _keyPath.Text.Trim()));
@@ -451,7 +451,7 @@ internal sealed class AgentWindow : Form
             // matter of typing the password and pressing Connect.
             _settings.DesignatedIp = _ip.Text.Trim();
             _settings.Username = _username.Text.Trim();
-            _settings.CompanyId = _company.Text.Trim();
+            _settings.SiteName = _site.Text.Trim();
             _settings.CsvFolder = _folder.Text.Trim();
             _settings.PrivateKeyPath = _keyPath.Text.Trim();
 

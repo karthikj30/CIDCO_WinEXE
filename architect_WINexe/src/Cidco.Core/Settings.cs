@@ -9,7 +9,13 @@ public static class SettingsKeys
     public const string DesignatedIp = "designated_ip";
     public const string Port = "port";
     public const string Username = "username";
-    public const string CompanyId = "company_id";
+    public const string SiteName = "site_name";
+
+    /// <summary>
+    /// What the site name was stored under before it was called a site name.
+    /// Read on load so an agent installed under the old build keeps its value.
+    /// </summary>
+    public const string LegacySiteName = "company_id";
     public const string InstalledAt = "installed_at";
     public const string InstallFolder = "install_folder";
     public const string PrivateKeyPath = "private_key_path";
@@ -39,7 +45,7 @@ public sealed class Settings
     public string DesignatedIp { get; set; } = "";
     public int Port { get; set; } = 2222;
     public string Username { get; set; } = "";
-    public string CompanyId { get; set; } = "";
+    public string SiteName { get; set; } = "";
 
     /// <summary>
     /// The private key to sign in with, when the server will not take a
@@ -60,7 +66,7 @@ public sealed class Settings
         public const string DesignatedIp = "127.0.0.1";
         public const int Port = 2222;
         public const string Username = "cidco@example.com";
-        public const string CompanyId = "ABCD123";
+        public const string SiteName = "ABCD123";
     }
 
     public static Settings Load(Database db)
@@ -71,7 +77,8 @@ public sealed class Settings
             CsvFolder = db.GetSetting(SettingsKeys.CsvFolder) ?? "",
             DesignatedIp = db.GetSetting(SettingsKeys.DesignatedIp) ?? "",
             Username = db.GetSetting(SettingsKeys.Username) ?? "",
-            CompanyId = db.GetSetting(SettingsKeys.CompanyId) ?? "",
+            SiteName = db.GetSetting(SettingsKeys.SiteName)
+                ?? db.GetSetting(SettingsKeys.LegacySiteName) ?? "",
             InstalledAt = db.GetSetting(SettingsKeys.InstalledAt) ?? "",
             InstallFolder = db.GetSetting(SettingsKeys.InstallFolder) ?? "",
             PrivateKeyPath = db.GetSetting(SettingsKeys.PrivateKeyPath) ?? "",
@@ -92,7 +99,7 @@ public sealed class Settings
         db.SetSetting(SettingsKeys.DesignatedIp, DesignatedIp);
         db.SetSetting(SettingsKeys.Port, Port.ToString());
         db.SetSetting(SettingsKeys.Username, Username);
-        db.SetSetting(SettingsKeys.CompanyId, CompanyId);
+        db.SetSetting(SettingsKeys.SiteName, SiteName);
         db.SetSetting(SettingsKeys.InstallFolder, InstallFolder);
         db.SetSetting(SettingsKeys.PrivateKeyPath, PrivateKeyPath);
         if (!string.IsNullOrEmpty(InstalledAt)) db.SetSetting(SettingsKeys.InstalledAt, InstalledAt);
@@ -101,6 +108,6 @@ public sealed class Settings
     /// <summary>The value to show in a field, falling back to what CIDCO published.</summary>
     public string IpOrDefault => string.IsNullOrWhiteSpace(DesignatedIp) ? Defaults.DesignatedIp : DesignatedIp;
     public string UsernameOrDefault => string.IsNullOrWhiteSpace(Username) ? Defaults.Username : Username;
-    public string CompanyIdOrDefault => string.IsNullOrWhiteSpace(CompanyId) ? Defaults.CompanyId : CompanyId;
+    public string SiteNameOrDefault => string.IsNullOrWhiteSpace(SiteName) ? Defaults.SiteName : SiteName;
     public int PortOrDefault => Port <= 0 ? Defaults.Port : Port;
 }

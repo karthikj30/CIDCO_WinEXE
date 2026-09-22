@@ -147,7 +147,7 @@ public class SetupFlowTests
         Assert.Equal(@"C:\CIDCO\exports", settings.CsvFolder);
         Assert.Equal(1800, settings.IntervalSeconds);
         Assert.Equal("cidco@example.com", settings.Username);
-        Assert.Equal("ABCD123", settings.CompanyId);
+        Assert.Equal("ABCD123", settings.SiteName);
         Assert.Equal(2222, settings.Port);
         Assert.Equal("", settings.Password);
     }
