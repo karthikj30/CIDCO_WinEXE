@@ -63,6 +63,13 @@ public sealed class CidcoSender : ICidcoTransport
     public TimeSpan Timeout { get; }
 
     /// <summary>
+    /// Station coordinates set at install. When both are present they are
+    /// appended to the existing AQI file stamp on every send.
+    /// </summary>
+    public string Latitude { get; init; } = "";
+    public string Longitude { get; init; } = "";
+
+    /// <summary>
     /// A folder to upload into on an ordinary SFTP server.
     ///
     /// Empty for CIDCO, whose intake works out where a file belongs from the
@@ -118,7 +125,12 @@ public sealed class CidcoSender : ICidcoTransport
         settings.UsernameOrDefault,
         settings.Password,
         settings.SiteNameOrDefault,
-        settings.CsvFolder);
+        settings.CsvFolder)
+    {
+        Latitude = settings.Latitude,
+        Longitude = settings.Longitude,
+        PrivateKeyPath = settings.PrivateKeyPath,
+    };
 
     /// <summary>The same sender pointed at a different port.</summary>
     public CidcoSender On(int port) =>
@@ -126,6 +138,8 @@ public sealed class CidcoSender : ICidcoTransport
         {
             RemoteDirectory = RemoteDirectory,
             PrivateKeyPath = PrivateKeyPath,
+            Latitude = Latitude,
+            Longitude = Longitude,
         };
 
     /// <summary>
@@ -145,7 +159,9 @@ public sealed class CidcoSender : ICidcoTransport
         string siteName,
         string csvFolder,
         TimeSpan? timeout = null,
-        string privateKeyPath = "")
+        string privateKeyPath = "",
+        string latitude = "",
+        string longitude = "")
     {
         var ports = address.PortsToTry();
         CidcoSender? attempted = null;
@@ -156,6 +172,8 @@ public sealed class CidcoSender : ICidcoTransport
             var sender = new CidcoSender(address.Host, port, username, password, siteName, csvFolder, timeout)
             {
                 PrivateKeyPath = privateKeyPath,
+                Latitude = latitude,
+                Longitude = longitude,
             };
             var result = sender.CheckConnection();
             attempted = sender;
@@ -376,14 +394,14 @@ public sealed class CidcoSender : ICidcoTransport
                 TransferOutcome.NothingToSend) with { FileName = source.Name };
 
         // Any local name is fine; the remote name is always
-        // siteName_timestamp_AQI.csv so CIDCO can parse it without the export
-        // name. The agent never creates folders — only drops the renamed file
-        // into a path that already exists (or into CIDCO's intake when no
-        // plain folder was named).
+        // siteName_timestamp[_lat_lon]_AQI.csv so CIDCO can parse it without
+        // the export name. The agent never creates folders — only drops the
+        // renamed file into a path that already exists (or into CIDCO's intake
+        // when no plain folder was named).
         var sentAt = DateTimeOffset.Now;
-        var remoteName = RemotePath.AqiFileName(SiteName, sentAt);
+        var remoteName = RemotePath.AqiFileName(SiteName, sentAt, Latitude, Longitude);
         var target = IsPlainSftp
-            ? RemotePath.IntoFolder(RemoteDirectory, SiteName, sentAt)
+            ? RemotePath.IntoFolder(RemoteDirectory, SiteName, sentAt, Latitude, Longitude)
             : RemotePath.For(SiteName, remoteName);
         var parent = RemotePath.ParentOf(target);
 

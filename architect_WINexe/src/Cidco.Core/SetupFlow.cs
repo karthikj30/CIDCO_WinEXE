@@ -7,6 +7,7 @@ public enum SetupStep
     Admin,
     Folder,
     Schedule,
+    Location,
     Install,
 }
 
@@ -24,6 +25,8 @@ public sealed class SetupFlow
     public string Role { get; set; } = "architect";
     public string CsvFolder { get; set; } = "";
     public string IntervalLabel { get; set; } = Schedule.LabelFor(Schedule.DefaultSeconds);
+    public string Latitude { get; set; } = Settings.Defaults.Latitude;
+    public string Longitude { get; set; } = Settings.Defaults.Longitude;
 
     /// <summary>The last thing that stopped the wizard moving on, if anything.</summary>
     public string Status { get; private set; } = "";
@@ -36,7 +39,7 @@ public sealed class SetupFlow
     /// </summary>
     public SetupStep[] Steps => IsAdmin
         ? new[] { SetupStep.Role, SetupStep.Admin }
-        : new[] { SetupStep.Role, SetupStep.Folder, SetupStep.Schedule, SetupStep.Install };
+        : new[] { SetupStep.Role, SetupStep.Folder, SetupStep.Schedule, SetupStep.Location, SetupStep.Install };
 
     public SetupStep Current
     {
@@ -83,6 +86,22 @@ public sealed class SetupFlow
             CsvFolder = folder;
         }
 
+        if (Current == SetupStep.Location)
+        {
+            if (!TryParseCoordinate(Latitude, -90, 90, out var lat, out var latProblem))
+            {
+                Status = latProblem;
+                return false;
+            }
+            if (!TryParseCoordinate(Longitude, -180, 180, out var lon, out var lonProblem))
+            {
+                Status = lonProblem;
+                return false;
+            }
+            Latitude = RemotePath.FormatCoord(lat);
+            Longitude = RemotePath.FormatCoord(lon);
+        }
+
         Status = "";
         if (_index < Steps.Length - 1) _index++;
         return true;
@@ -102,6 +121,47 @@ public sealed class SetupFlow
         IntervalSeconds = Schedule.SecondsFor(IntervalLabel),
         Username = Settings.Defaults.Username,
         SiteName = Settings.Defaults.SiteName,
+        Latitude = Latitude.Trim(),
+        Longitude = Longitude.Trim(),
         Port = Settings.Defaults.Port,
     };
+
+    /// <summary>A latitude or longitude the wizard will accept.</summary>
+    public static bool TryParseCoordinate(
+        string raw,
+        double min,
+        double max,
+        out double value,
+        out string problem)
+    {
+        value = 0;
+        problem = "";
+        var text = (raw ?? "").Trim();
+        if (text.Length == 0)
+        {
+            problem = min == -90
+                ? "Enter the station latitude (degrees, e.g. 19.0330)."
+                : "Enter the station longitude (degrees, e.g. 73.0297).";
+            return false;
+        }
+
+        if (!double.TryParse(text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out value)
+            && !double.TryParse(text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.CurrentCulture, out value))
+        {
+            problem = "That is not a number — use decimal degrees, e.g. 19.0330.";
+            return false;
+        }
+
+        if (value < min || value > max)
+        {
+            problem = min == -90
+                ? "Latitude must be between -90 and 90."
+                : "Longitude must be between -180 and 180.";
+            return false;
+        }
+
+        return true;
+    }
 }

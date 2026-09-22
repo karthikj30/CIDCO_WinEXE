@@ -10,6 +10,8 @@ public static class SettingsKeys
     public const string Port = "port";
     public const string Username = "username";
     public const string SiteName = "site_name";
+    public const string Latitude = "latitude";
+    public const string Longitude = "longitude";
 
     /// <summary>
     /// What the site name was stored under before it was called a site name.
@@ -48,6 +50,13 @@ public sealed class Settings
     public string SiteName { get; set; } = "";
 
     /// <summary>
+    /// Station coordinates, set once during install and locked afterwards.
+    /// Embedded in every uploaded file name alongside the existing stamp.
+    /// </summary>
+    public string Latitude { get; set; } = "";
+    public string Longitude { get; set; } = "";
+
+    /// <summary>
     /// The private key to sign in with, when the server will not take a
     /// password — which is most cloud servers. Only the path is kept; the key
     /// itself stays where it is, and its passphrase is never stored.
@@ -67,6 +76,9 @@ public sealed class Settings
         public const int Port = 2222;
         public const string Username = "cidco@example.com";
         public const string SiteName = "ABCD123";
+        /// <summary>Navi Mumbai — pre-filled so the installer has a starting point.</summary>
+        public const string Latitude = "19.0330";
+        public const string Longitude = "73.0297";
     }
 
     public static Settings Load(Database db)
@@ -79,6 +91,8 @@ public sealed class Settings
             Username = db.GetSetting(SettingsKeys.Username) ?? "",
             SiteName = db.GetSetting(SettingsKeys.SiteName)
                 ?? db.GetSetting(SettingsKeys.LegacySiteName) ?? "",
+            Latitude = db.GetSetting(SettingsKeys.Latitude) ?? "",
+            Longitude = db.GetSetting(SettingsKeys.Longitude) ?? "",
             InstalledAt = db.GetSetting(SettingsKeys.InstalledAt) ?? "",
             InstallFolder = db.GetSetting(SettingsKeys.InstallFolder) ?? "",
             PrivateKeyPath = db.GetSetting(SettingsKeys.PrivateKeyPath) ?? "",
@@ -100,6 +114,8 @@ public sealed class Settings
         db.SetSetting(SettingsKeys.Port, Port.ToString());
         db.SetSetting(SettingsKeys.Username, Username);
         db.SetSetting(SettingsKeys.SiteName, SiteName);
+        db.SetSetting(SettingsKeys.Latitude, Latitude);
+        db.SetSetting(SettingsKeys.Longitude, Longitude);
         db.SetSetting(SettingsKeys.InstallFolder, InstallFolder);
         db.SetSetting(SettingsKeys.PrivateKeyPath, PrivateKeyPath);
         if (!string.IsNullOrEmpty(InstalledAt)) db.SetSetting(SettingsKeys.InstalledAt, InstalledAt);
@@ -109,5 +125,7 @@ public sealed class Settings
     public string IpOrDefault => string.IsNullOrWhiteSpace(DesignatedIp) ? Defaults.DesignatedIp : DesignatedIp;
     public string UsernameOrDefault => string.IsNullOrWhiteSpace(Username) ? Defaults.Username : Username;
     public string SiteNameOrDefault => string.IsNullOrWhiteSpace(SiteName) ? Defaults.SiteName : SiteName;
+    public string LatitudeOrDefault => string.IsNullOrWhiteSpace(Latitude) ? Defaults.Latitude : Latitude;
+    public string LongitudeOrDefault => string.IsNullOrWhiteSpace(Longitude) ? Defaults.Longitude : Longitude;
     public int PortOrDefault => Port <= 0 ? Defaults.Port : Port;
 }

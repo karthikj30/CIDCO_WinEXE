@@ -22,8 +22,8 @@ import {
  *   Poll 2  filed file → validate (10 steps) → DB → archive
  *
  * The Windows agent only drops a renamed CSV
- * (`companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv`) into intake. Folder creation and
- * database work live here.
+ * (`siteName_dd_mm_yyyy_hh-mm-ss[_lat_lon]_AQI.csv`) into intake. Folder
+ * creation and database work live here.
  */
 
 export const INGESTION_STEPS = [
@@ -49,15 +49,18 @@ export type IngestionStepResult = {
  * The name the Windows agent always sends:
  *
  *   ABCD123_21_09_2026_11-30-24_AQI.csv
+ *   ABCD123_21_09_2026_11-30-24_19.033_73.0297_AQI.csv
  *
- * Site name, date as dd_mm_yyyy, time as hh-mm-ss. It arrives flat because
- * the agent may not create folders; poll1 takes it apart and builds the tree.
+ * Site name, date as dd_mm_yyyy, time as hh-mm-ss, then optional latitude and
+ * longitude stamped at install. It arrives flat because the agent may not
+ * create folders; poll1 takes it apart and builds the tree.
  *
  * The site name is matched non-greedily up to the date, so an id that itself
- * contains underscores still parses.
+ * contains underscores still parses. Coordinates are optional so older agents
+ * without a location step still validate.
  */
 const AQI_FILE_RE =
-  /^(.+?)_(\d{2})_(\d{2})_(\d{4})_(\d{2})-(\d{2})-(\d{2})_AQI\.(csv|xlsx)$/i;
+  /^(.+?)_(\d{2})_(\d{2})_(\d{4})_(\d{2})-(\d{2})-(\d{2})(?:_(-?\d+(?:\.\d+)?)_(-?\d+(?:\.\d+)?))?_AQI\.(csv|xlsx)$/i;
 
 export type ParsedAqiFileName = {
   siteName: string;
@@ -67,6 +70,9 @@ export type ParsedAqiFileName = {
   timeStem: string;
   /** dd_mm_yyyy_hh-mm-ss, the two joined: one delivery, identified. */
   timestamp: string;
+  /** Decimal degrees when the agent stamped them; otherwise undefined. */
+  latitude?: string;
+  longitude?: string;
   extension: string;
   at: Date;
 };
@@ -76,7 +82,7 @@ export function parseAqiFileName(fileName: string): ParsedAqiFileName | null {
   const match = AQI_FILE_RE.exec(base);
   if (!match) return null;
 
-  const [, siteName, dd, mm, yyyy, hh, mi, ss, extension] = match;
+  const [, siteName, dd, mm, yyyy, hh, mi, ss, latitude, longitude, extension] = match;
   const at = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss));
 
   // A name can be well-formed and still be nonsense — 32_13_2026 matches the
@@ -95,6 +101,7 @@ export function parseAqiFileName(fileName: string): ParsedAqiFileName | null {
     dateFolder,
     timeStem,
     timestamp: `${dateFolder}_${timeStem}`,
+    ...(latitude && longitude ? { latitude, longitude } : {}),
     extension: extension.toLowerCase(),
     at,
   };
@@ -262,7 +269,7 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
     try {
       const parsed = parseAqiFileName(entry.name);
       if (!parsed) {
-        errors.push(`${entry.name}: filename must be companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv`);
+        errors.push(`${entry.name}: filename must be siteName_dd_mm_yyyy_hh-mm-ss[_lat_lon]_AQI.csv`);
         continue;
       }
 
@@ -439,7 +446,7 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
           INGESTION_STEPS[3],
           false,
           `delivered as "${row.deliveredName ?? '(not recorded)'}" — ` +
-            'expected companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv',
+            'expected siteName_dd_mm_yyyy_hh-mm-ss[_lat_lon]_AQI.csv',
         );
         await failRow(row.id, steps);
         continue;

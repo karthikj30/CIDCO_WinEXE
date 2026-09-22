@@ -30,6 +30,8 @@ internal sealed class AgentWindow : Form
     private readonly TextBox _username = new();
     private readonly TextBox _password = new();
     private readonly TextBox _site = new();
+    private readonly TextBox _latitude = new();
+    private readonly TextBox _longitude = new();
     private readonly TextBox _folder = new();
     private readonly TextBox _keyPath = new();
 
@@ -83,7 +85,7 @@ internal sealed class AgentWindow : Form
         {
             Text = " Connect to CIDCO ",
             Dock = DockStyle.Top,
-            Height = 166,
+            Height = 210,
             Padding = new Padding(10, 6, 10, 6),
         };
 
@@ -114,15 +116,46 @@ internal sealed class AgentWindow : Form
         }
         _password.UseSystemPasswordChar = true;
 
+        // Coordinates are fixed at install — shown here, not editable.
+        connect.Controls.Add(new Label
+        {
+            Text = "Latitude (set at install)",
+            Font = Theme.Small,
+            ForeColor = Theme.Muted,
+            Location = new Point(14, 68),
+            Size = new Size(160, 14),
+        });
+        _latitude.Location = new Point(14, 84);
+        _latitude.Width = 160;
+        _latitude.Font = Theme.Body;
+        _latitude.ReadOnly = true;
+        _latitude.BackColor = Theme.PanelBg;
+        connect.Controls.Add(_latitude);
+
+        connect.Controls.Add(new Label
+        {
+            Text = "Longitude (set at install)",
+            Font = Theme.Small,
+            ForeColor = Theme.Muted,
+            Location = new Point(186, 68),
+            Size = new Size(160, 14),
+        });
+        _longitude.Location = new Point(186, 84);
+        _longitude.Width = 160;
+        _longitude.Font = Theme.Body;
+        _longitude.ReadOnly = true;
+        _longitude.BackColor = Theme.PanelBg;
+        connect.Controls.Add(_longitude);
+
         connect.Controls.Add(new Label
         {
             Text = "File path (set during setup — the newest .csv here is the one that goes)",
             Font = Theme.Small,
             ForeColor = Theme.Muted,
-            Location = new Point(14, 68),
+            Location = new Point(14, 112),
             Size = new Size(420, 14),
         });
-        _folder.Location = new Point(14, 84);
+        _folder.Location = new Point(14, 128);
         _folder.Width = 560;
         _folder.Font = Theme.Body;
         _folder.TextChanged += (_, _) => RefreshLocal();
@@ -135,17 +168,17 @@ internal sealed class AgentWindow : Form
             Text = "Private key (optional \u2014 .ppk or .pem, for servers that do not take a password)",
             Font = Theme.Small,
             ForeColor = Theme.Muted,
-            Location = new Point(14, 112),
+            Location = new Point(14, 156),
             Size = new Size(460, 14),
         });
-        _keyPath.Location = new Point(14, 128);
+        _keyPath.Location = new Point(14, 172);
         _keyPath.Width = 480;
         _keyPath.Font = Theme.Body;
         connect.Controls.Add(_keyPath);
 
         _browseKey.Text = "Browse\u2026";
         _browseKey.Size = new Size(80, 24);
-        _browseKey.Location = new Point(502, 127);
+        _browseKey.Location = new Point(502, 171);
         _browseKey.Click += (_, _) => BrowseForKey();
         connect.Controls.Add(_browseKey);
 
@@ -266,6 +299,8 @@ internal sealed class AgentWindow : Form
         _ip.Text = _settings.IpOrDefault;
         _username.Text = _settings.UsernameOrDefault;
         _site.Text = _settings.SiteNameOrDefault;
+        _latitude.Text = string.IsNullOrWhiteSpace(_settings.Latitude) ? "(not set at install)" : _settings.Latitude;
+        _longitude.Text = string.IsNullOrWhiteSpace(_settings.Longitude) ? "(not set at install)" : _settings.Longitude;
         _folder.Text = _settings.CsvFolder;
         _keyPath.Text = _settings.PrivateKeyPath;
         _scheduleText.Text = $"Automatic sending is off · {Schedule.Describe(_settings.IntervalSeconds)}";
@@ -304,6 +339,8 @@ internal sealed class AgentWindow : Form
             _folder.Text.Trim())
         {
             PrivateKeyPath = _keyPath.Text.Trim(),
+            Latitude = _settings.Latitude,
+            Longitude = _settings.Longitude,
         };
     }
 
@@ -423,7 +460,9 @@ internal sealed class AgentWindow : Form
                 _site.Text.Trim(),
                 _folder.Text.Trim(),
                 timeout: null,
-                privateKeyPath: _keyPath.Text.Trim()));
+                privateKeyPath: _keyPath.Text.Trim(),
+                latitude: _settings.Latitude,
+                longitude: _settings.Longitude));
         }
         catch (Exception error)
         {

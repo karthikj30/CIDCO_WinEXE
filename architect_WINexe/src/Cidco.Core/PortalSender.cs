@@ -39,6 +39,10 @@ public sealed class PortalSender : ICidcoTransport
     public string CsvFolder { get; }
     public TimeSpan Timeout { get; }
 
+    /// <summary>Station coordinates set at install — embedded in the rename stamp.</summary>
+    public string Latitude { get; init; } = "";
+    public string Longitude { get; init; } = "";
+
     public PortalSender(
         Uri baseAddress,
         string username,
@@ -105,9 +109,9 @@ public sealed class PortalSender : ICidcoTransport
             return SendResult.Failed($"{source.Name} is not a .csv file", TransferOutcome.NothingToSend)
                 with { FileName = source.Name };
 
-        // Same rename rule as SFTP: siteName_timestamp_AQI.csv regardless of
-        // the local export name.
-        var remoteName = RemotePath.AqiFileName(SiteName, DateTimeOffset.Now);
+        // Same rename rule as SFTP: siteName_timestamp[_lat_lon]_AQI.csv
+        // regardless of the local export name.
+        var remoteName = RemotePath.AqiFileName(SiteName, DateTimeOffset.Now, Latitude, Longitude);
 
         byte[] bytes;
         try

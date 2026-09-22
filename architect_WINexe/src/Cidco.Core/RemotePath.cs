@@ -9,8 +9,8 @@ namespace Cidco.Core;
 ///     /&lt;siteName&gt;/&lt;the folder the CSV was taken from&gt;/&lt;siteName&gt;_&lt;timestamp&gt;_AQI.csv
 ///
 /// The local export may be named anything (e.g. readings.csv); before upload it
-/// is always renamed to siteName_timestamp_AQI.csv so CIDCO's poll handlers
-/// can parse company and time from the file name alone.
+/// is always renamed to siteName_timestamp[_lat_lon]_AQI.csv so CIDCO's poll
+/// handlers can parse company and time from the file name alone.
 ///
 /// The agent never creates folders on the server — that is CIDCO's job. It only
 /// checks that the destination folder already exists, then drops the renamed
@@ -29,10 +29,15 @@ public static class RemotePath
     /// <summary>
     /// The fixed remote name every CSV is sent as:
     ///
-    ///     ABCD123_21_09_2026_11-30-24_AQI.csv
+    ///     ABCD123_21_09_2026_11-30-24_19.033_73.0297_AQI.csv
     ///
     /// Site name, then the date as dd_mm_yyyy, then the time as hh-mm-ss,
-    /// then the AQI suffix. The original export name is discarded on purpose.
+    /// then latitude and longitude when the installer collected them, then
+    /// the AQI suffix. The original export name is discarded on purpose.
+    ///
+    /// Without coordinates (older installs), the stamp is unchanged:
+    ///
+    ///     ABCD123_21_09_2026_11-30-24_AQI.csv
     ///
     /// It is one flat name rather than a folder path because the agent is not
     /// allowed to create folders on the server. Everything CIDCO needs to file
@@ -46,12 +51,25 @@ public static class RemotePath
     /// colon-named file could not save it. Linux accepts it; Windows is the
     /// side that breaks, and both sides have to be able to hold this file.
     /// </summary>
-    public static string AqiFileName(string siteName, DateTimeOffset at)
+    public static string AqiFileName(
+        string siteName,
+        DateTimeOffset at,
+        string? latitude = null,
+        string? longitude = null)
     {
         var company = siteName.Trim().Trim('/');
         if (company.Length == 0) company = "UNKNOWN";
-        return $"{company}_{DateFolder(at)}_{TimeStem(at)}_AQI.csv";
+        var stem = $"{company}_{DateFolder(at)}_{TimeStem(at)}";
+        var lat = (latitude ?? "").Trim();
+        var lon = (longitude ?? "").Trim();
+        if (lat.Length > 0 && lon.Length > 0)
+            return $"{stem}_{lat}_{lon}_AQI.csv";
+        return $"{stem}_AQI.csv";
     }
+
+    /// <summary>Decimal degrees for a file name — invariant, no scientific notation.</summary>
+    public static string FormatCoord(double value) =>
+        value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>The date as CIDCO files it: 21_09_2026.</summary>
     public static string DateFolder(DateTimeOffset at) =>
@@ -108,8 +126,13 @@ public static class RemotePath
     /// the renamed AQI file. No company/month/date tree — the agent must not
     /// create folders; CIDCO's poll1 builds that layout after intake.
     /// </summary>
-    public static string IntoFolder(string remoteDirectory, string siteName, DateTimeOffset at) =>
-        Join(remoteDirectory, AqiFileName(siteName, at));
+    public static string IntoFolder(
+        string remoteDirectory,
+        string siteName,
+        DateTimeOffset at,
+        string? latitude = null,
+        string? longitude = null) =>
+        Join(remoteDirectory, AqiFileName(siteName, at, latitude, longitude));
 
     /// <summary>
     /// Parent directory of a remote file path, or empty when the file sits at root.

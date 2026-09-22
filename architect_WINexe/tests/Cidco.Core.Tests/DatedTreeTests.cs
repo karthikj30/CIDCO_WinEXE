@@ -4,7 +4,7 @@ using Xunit;
 namespace Cidco.Core.Tests;
 
 /// <summary>
-/// Every CSV is renamed to siteName_dd_mm_yyyy_hh-mm-ss_AQI.csv before upload.
+/// Every CSV is renamed to siteName_dd_mm_yyyy_hh-mm-ss[_lat_lon]_AQI.csv before upload.
 /// The agent never builds a folder tree — CIDCO's poll1 takes this name apart
 /// and files it as &lt;siteName&gt;/&lt;dd_mm_yyyy&gt;/&lt;hh-mm-ss&gt;.csv.
 /// </summary>
@@ -17,6 +17,16 @@ public class AqiFileNameTests
     public void Any_local_name_becomes_company_date_time_AQI() =>
         Assert.Equal("ABCD123_19_09_2026_13-28-49_AQI.csv",
             RemotePath.AqiFileName("ABCD123", Noon));
+
+    [Fact]
+    public void Coordinates_are_appended_without_dropping_the_existing_stamp() =>
+        Assert.Equal("ABCD123_19_09_2026_13-28-49_19.033_73.0297_AQI.csv",
+            RemotePath.AqiFileName("ABCD123", Noon, "19.033", "73.0297"));
+
+    [Fact]
+    public void A_missing_coordinate_keeps_the_legacy_name() =>
+        Assert.Equal("ABCD123_19_09_2026_13-28-49_AQI.csv",
+            RemotePath.AqiFileName("ABCD123", Noon, "19.033", ""));
 
     [Fact]
     public void The_company_moves_with_the_company() =>
@@ -36,6 +46,12 @@ public class AqiFileNameTests
         Assert.Equal(
             "/home/ubuntu/SFTP/ABCD123_19_09_2026_13-28-49_AQI.csv",
             RemotePath.IntoFolder("/home/ubuntu/SFTP", "ABCD123", Noon));
+
+    [Fact]
+    public void Into_a_named_folder_carries_coordinates_too() =>
+        Assert.Equal(
+            "/home/ubuntu/SFTP/ABCD123_19_09_2026_13-28-49_19.033_73.0297_AQI.csv",
+            RemotePath.IntoFolder("/home/ubuntu/SFTP", "ABCD123", Noon, "19.033", "73.0297"));
 
     [Fact]
     public void CIDCO_intake_gets_the_renamed_file_under_the_company() =>
@@ -104,7 +120,7 @@ public class AqiFileNameTests
     [Fact]
     public void Nothing_in_the_name_is_illegal_on_Windows()
     {
-        var name = RemotePath.AqiFileName("ABCD123", Noon);
+        var name = RemotePath.AqiFileName("ABCD123", Noon, "-19.033", "73.0297");
         Assert.DoesNotContain(name, c => Path.GetInvalidFileNameChars().Contains(c));
         // And it is a name, not a path: poll1 owns the folders.
         Assert.DoesNotContain("/", name);

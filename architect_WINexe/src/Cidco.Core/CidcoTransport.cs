@@ -41,13 +41,19 @@ public static class CidcoTransports
         string siteName,
         string csvFolder,
         TimeSpan? timeout = null,
-        string privateKeyPath = "")
+        string privateKeyPath = "",
+        string latitude = "",
+        string longitude = "")
     {
         if (address.IsPortal)
         {
             var portal = new PortalSender(
                 address.PortalBase(), username, password, siteName, csvFolder,
-                timeout ?? TimeSpan.FromSeconds(30));
+                timeout ?? TimeSpan.FromSeconds(30))
+            {
+                Latitude = latitude,
+                Longitude = longitude,
+            };
             return (portal, portal.CheckConnection());
         }
 
@@ -60,12 +66,15 @@ public static class CidcoTransports
             {
                 RemoteDirectory = address.RemoteDirectory,
                 PrivateKeyPath = privateKeyPath,
+                Latitude = latitude,
+                Longitude = longitude,
             };
             return (plain, plain.CheckConnection());
         }
 
         var (sftp, result) = CidcoSender.FindIntake(
-            address, username, password, siteName, csvFolder, timeout, privateKeyPath);
+            address, username, password, siteName, csvFolder, timeout, privateKeyPath,
+            latitude, longitude);
         return (sftp, result);
     }
 }

@@ -24,9 +24,9 @@ public class SetupFlowTests
     }
 
     [Fact]
-    public void The_architect_branch_asks_folder_then_schedule_then_installs() =>
+    public void The_architect_branch_asks_folder_then_schedule_then_location_then_installs() =>
         Assert.Equal(
-            new[] { SetupStep.Role, SetupStep.Folder, SetupStep.Schedule, SetupStep.Install },
+            new[] { SetupStep.Role, SetupStep.Folder, SetupStep.Schedule, SetupStep.Location, SetupStep.Install },
             new SetupFlow().Steps);
 
     [Fact]
@@ -110,6 +110,9 @@ public class SetupFlowTests
         flow.TryAdvance(exists);
         Assert.Equal("Next >", flow.NextButtonText);
         flow.TryAdvance(exists);
+        Assert.Equal(SetupStep.Location, flow.Current);
+        Assert.Equal("Next >", flow.NextButtonText);
+        flow.TryAdvance(exists);
         Assert.Equal(SetupStep.Install, flow.Current);
         Assert.Equal("Install", flow.NextButtonText);
     }
@@ -139,6 +142,8 @@ public class SetupFlowTests
         {
             CsvFolder = @"  C:\CIDCO\exports  ",
             IntervalLabel = "Every 30 minutes",
+            Latitude = "19.0760",
+            Longitude = "72.8777",
         };
 
         var settings = flow.ToSettings();
@@ -148,6 +153,8 @@ public class SetupFlowTests
         Assert.Equal(1800, settings.IntervalSeconds);
         Assert.Equal("cidco@example.com", settings.Username);
         Assert.Equal("ABCD123", settings.SiteName);
+        Assert.Equal("19.0760", settings.Latitude);
+        Assert.Equal("72.8777", settings.Longitude);
         Assert.Equal(2222, settings.Port);
         Assert.Equal("", settings.Password);
     }
@@ -174,7 +181,37 @@ public class SetupFlowTests
         flow.IntervalLabel = "Every 15 minutes";
         Assert.True(flow.TryAdvance(exists));
 
+        Assert.Equal(SetupStep.Location, flow.Current);
+        Assert.True(flow.TryAdvance(exists)); // defaults are valid Navi Mumbai coords
+
         Assert.Equal(SetupStep.Install, flow.Current);
         Assert.Equal(900, flow.ToSettings().IntervalSeconds);
+        Assert.Equal("19.033", flow.ToSettings().Latitude);
+        Assert.Equal("73.0297", flow.ToSettings().Longitude);
+    }
+
+    [Fact]
+    public void An_empty_latitude_stops_the_wizard()
+    {
+        var flow = new SetupFlow { CsvFolder = @"C:\exports", Latitude = "", Longitude = "73.0" };
+        var exists = FolderExists(@"C:\exports");
+        flow.TryAdvance(exists);
+        flow.TryAdvance(exists);
+        flow.TryAdvance(exists);
+        Assert.Equal(SetupStep.Location, flow.Current);
+        Assert.False(flow.TryAdvance(exists));
+        Assert.Contains("latitude", flow.Status, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void An_out_of_range_longitude_stops_the_wizard()
+    {
+        var flow = new SetupFlow { CsvFolder = @"C:\exports", Latitude = "19", Longitude = "200" };
+        var exists = FolderExists(@"C:\exports");
+        flow.TryAdvance(exists);
+        flow.TryAdvance(exists);
+        flow.TryAdvance(exists);
+        Assert.False(flow.TryAdvance(exists));
+        Assert.Contains("Longitude", flow.Status);
     }
 }

@@ -10,7 +10,8 @@ namespace Cidco.Agent;
 ///     1. Log in as .........  Administrator or Architect
 ///     2. CSV folder ........  where the automation picks the export up
 ///     3. Schedule ..........  how often it is sent
-///     4. Install ...........  unpacks the agent and writes the settings
+///     4. Location ..........  latitude / longitude (locked after install)
+///     5. Install ...........  unpacks the agent and writes the settings
 ///
 /// Only the architect side is installed here — the administrator side is
 /// CIDCO's own web portal, and the wizard says so rather than pretending to
@@ -42,7 +43,7 @@ internal sealed class SetupWizard : Form
     public SetupWizard()
     {
         Text = "CIDCO AQI Agent 1.0 Setup";
-        ClientSize = new Size(600, 410);
+        ClientSize = new Size(600, 440);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
@@ -142,6 +143,7 @@ internal sealed class SetupWizard : Form
             case SetupStep.Admin: BuildAdminStep(); break;
             case SetupStep.Folder: BuildFolderStep(); break;
             case SetupStep.Schedule: BuildScheduleStep(); break;
+            case SetupStep.Location: BuildLocationStep(); break;
             case SetupStep.Install: BuildInstallStep(); break;
         }
 
@@ -336,6 +338,69 @@ internal sealed class SetupWizard : Form
 
     }
 
+    private void BuildLocationStep()
+    {
+        var y = Heading(
+            "Station coordinates",
+            "Latitude and longitude for this site. They are pre-filled for Navi Mumbai — " +
+            "change them if needed. After install they are locked and stamped onto every sent file.");
+
+        _body.Controls.Add(new Label
+        {
+            Text = "Latitude",
+            Font = Theme.Small,
+            ForeColor = Theme.Muted,
+            Location = new Point(24, y),
+            AutoSize = true,
+        });
+        var lat = new TextBox
+        {
+            Text = _flow.Latitude,
+            Location = new Point(24, y + 18),
+            Width = 180,
+            Font = Theme.Body,
+        };
+        lat.TextChanged += (_, _) => _flow.Latitude = lat.Text;
+        _body.Controls.Add(lat);
+
+        _body.Controls.Add(new Label
+        {
+            Text = "Longitude",
+            Font = Theme.Small,
+            ForeColor = Theme.Muted,
+            Location = new Point(220, y),
+            AutoSize = true,
+        });
+        var lon = new TextBox
+        {
+            Text = _flow.Longitude,
+            Location = new Point(220, y + 18),
+            Width = 180,
+            Font = Theme.Body,
+        };
+        lon.TextChanged += (_, _) => _flow.Longitude = lon.Text;
+        _body.Controls.Add(lon);
+
+        _status = new Label
+        {
+            Text = "",
+            ForeColor = Theme.Bad,
+            Font = Theme.Small,
+            Location = new Point(24, y + 52),
+            Size = new Size(390, 36),
+        };
+        _body.Controls.Add(_status);
+
+        _body.Controls.Add(new Label
+        {
+            Text = "Decimal degrees, e.g. 19.0330 / 73.0297. Embedded in the file name on every send.",
+            ForeColor = Theme.Faint,
+            Font = Theme.Small,
+            Location = new Point(24, y + 92),
+            Size = new Size(390, 32),
+        });
+    }
+
     private void BuildInstallStep()
     {
         var y = Heading("Ready to install", "Review the settings, then install. Nothing is sent to CIDCO yet.");
@@ -343,7 +408,7 @@ internal sealed class SetupWizard : Form
         var summary = new Panel
         {
             Location = new Point(24, y - 8),
-            Size = new Size(390, 74),
+            Size = new Size(390, 116),
             BackColor = Theme.PanelBg,
             BorderStyle = BorderStyle.FixedSingle,
         };
@@ -353,6 +418,8 @@ internal sealed class SetupWizard : Form
                      ("Install for", "Architect"),
                      ("CSV folder", _flow.CsvFolder.Length > 0 ? _flow.CsvFolder : "(not set)"),
                      ("Schedule", _flow.IntervalLabel),
+                     ("Latitude", _flow.Latitude),
+                     ("Longitude", _flow.Longitude),
                  })
         {
             summary.Controls.Add(new Label
@@ -375,7 +442,7 @@ internal sealed class SetupWizard : Form
         }
         _body.Controls.Add(summary);
 
-        var optionsTop = y + 74;
+        var optionsTop = y + 116;
         var desktop = new CheckBox
         {
             Text = "Create a desktop shortcut",
