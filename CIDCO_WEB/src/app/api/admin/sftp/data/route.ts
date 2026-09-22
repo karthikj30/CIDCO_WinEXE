@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const siteName = new URL(req.url).searchParams.get('siteName');
 
     const [companies, files] = await Promise.all([
-      prisma.company.findMany({ orderBy: { siteName: 'asc' } }),
+      prisma.company.findMany({ orderBy: { siteName: 'asc' }, include: { department: true, node: true } }),
       prisma.dataFile.findMany({
         where: siteName ? { siteName } : {},
         orderBy: { receivedAt: 'desc' },
@@ -61,6 +61,8 @@ export async function GET(req: NextRequest) {
             publicKey: company.publicKey,
             userId: company.userId,
             email: company.email,
+            department: company.department?.name ?? null,
+            node: company.node?.name ?? null,
             active: company.active,
             createdAt: company.createdAt,
           },
@@ -79,6 +81,8 @@ export async function GET(req: NextRequest) {
                 importedCount: f.importedCount,
                 receivedAt: f.receivedAt,
                 timestamp: f.timestamp,
+                latitude: f.latitude,
+                longitude: f.longitude,
                 pollStatus: f.pollStatus,
                 fileStatus: f.fileStatus,
               })),

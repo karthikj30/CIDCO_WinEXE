@@ -17,6 +17,9 @@ type DataFile = {
   fileName: string;
   /** The flat name the agent delivered it under, before poll1 filed it. */
   deliveredName: string | null;
+  /** Where the station stands, when the agent stamped it into the name. */
+  latitude: number | null;
+  longitude: number | null;
   relativePath: string;
   sizeBytes: number;
   rowCount: number;
@@ -35,6 +38,8 @@ type Node = {
     publicKey: string | null;
     userId: string | null;
     email: string | null;
+    department: string | null;
+    node: string | null;
     active: boolean;
     createdAt: string;
   };
@@ -216,6 +221,12 @@ export default function SftpDataPanel() {
                         </dd>
                       </div>
                       <div>
+                        <dt className="font-semibold uppercase tracking-wide text-slate-500">Department / node</dt>
+                        <dd className="mt-0.5 text-slate-900">
+                          {[node.company.department, node.company.node].filter(Boolean).join(' · ') || '—'}
+                        </dd>
+                      </div>
+                      <div>
                         <dt className="font-semibold uppercase tracking-wide text-slate-500">Registered file path</dt>
                         <dd className="mt-0.5 break-all font-mono text-slate-900">{node.company.designatedPath || '(none — poll1 creates tree)'}</dd>
                       </div>
@@ -277,6 +288,11 @@ export default function SftpDataPanel() {
                                         {f.deliveredName && (
                                           <p className="ml-5 font-mono text-[10px] text-slate-400">
                                             delivered as {f.deliveredName}
+                                          </p>
+                                        )}
+                                        {f.latitude !== null && f.longitude !== null && (
+                                          <p className="ml-5 font-mono text-[10px] text-slate-500">
+                                            station {f.latitude.toFixed(6)}, {f.longitude.toFixed(6)}
                                           </p>
                                         )}
                                         {f.fileStatus && (

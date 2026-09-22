@@ -537,6 +537,10 @@ model DataFile {
   /// Kept because the filed name no longer carries the company id, and step 4
   /// of the ingestion service validates what actually arrived.
   deliveredName   String?
+  /// Where the station stands, read out of the delivered name. Null for a
+  /// file sent by an agent installed before the position was collected.
+  latitude        Float?
+  longitude       Float?
   sizeBytes       Int
   rowCount        Int               @default(0)
   importedCount   Int               @default(0)

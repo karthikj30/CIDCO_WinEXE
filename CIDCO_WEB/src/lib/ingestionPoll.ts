@@ -70,9 +70,13 @@ export type ParsedAqiFileName = {
   timeStem: string;
   /** dd_mm_yyyy_hh-mm-ss, the two joined: one delivery, identified. */
   timestamp: string;
-  /** Decimal degrees when the agent stamped them; otherwise undefined. */
-  latitude?: string;
-  longitude?: string;
+  /**
+   * Decimal degrees when the agent stamped them, and only when they name a
+   * real place — null otherwise, so a reading is never filed at a point past
+   * the poles or the date line.
+   */
+  latitude: number | null;
+  longitude: number | null;
   extension: string;
   at: Date;
 };
@@ -101,10 +105,21 @@ export function parseAqiFileName(fileName: string): ParsedAqiFileName | null {
     dateFolder,
     timeStem,
     timestamp: `${dateFolder}_${timeStem}`,
-    ...(latitude && longitude ? { latitude, longitude } : {}),
+    ...coordinatesOf(latitude, longitude),
     extension: extension.toLowerCase(),
     at,
   };
+}
+
+/** Reads the stamped pair, keeping it only when it is somewhere on Earth. */
+function coordinatesOf(lat?: string, lon?: string) {
+  const none = { latitude: null, longitude: null };
+  if (lat === undefined || lon === undefined) return none;
+  const latitude = Number(lat);
+  const longitude = Number(lon);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return none;
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return none;
+  return { latitude, longitude };
 }
 
 const pathExists = (p: string) => fs.stat(p).then(() => true, () => false);
@@ -234,6 +249,8 @@ export async function enqueueInboxFile(params: {
         dateFolder: parsed?.dateFolder ?? 'pending',
         timestampFolder: parsed?.timeStem ?? 'pending',
         timestamp: parsed?.timestamp ?? null,
+        latitude: parsed?.latitude ?? null,
+        longitude: parsed?.longitude ?? null,
         relativePath: `inbox/${inboxName}`,
         fileName: inboxName,
         deliveredName: inboxName,
@@ -328,6 +345,9 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
             dateFolder: where.dateFolder,
             timestampFolder: where.timestampFolder,
             timestamp: parsed.timestamp,
+            // Where the station stands, as the agent stamped it.
+            latitude: parsed.latitude,
+            longitude: parsed.longitude,
             relativePath: where.relativePath,
             fileName: where.leaf,
             deliveredName: entry.name,
@@ -348,6 +368,9 @@ export async function runPoll1(): Promise<{ moved: number; errors: string[] }> {
             dateFolder: where.dateFolder,
             timestampFolder: where.timestampFolder,
             timestamp: parsed.timestamp,
+            // Where the station stands, as the agent stamped it.
+            latitude: parsed.latitude,
+            longitude: parsed.longitude,
             relativePath: where.relativePath,
             fileName: where.leaf,
             deliveredName: entry.name,

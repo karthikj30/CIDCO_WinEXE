@@ -108,17 +108,20 @@ async function main() {
   // 10 rows, 3 of them missing the required AQI Value.
   const partly = stamp(-360);
   await drop(`ABCD123_${partly}_AQI.csv`, partlyBlankCsv(10, [2, 5, 7]));
+  // Sent by an agent that was given the station's position at install time.
+  const located = stamp(-420);
+  await drop(`ABCD123_${located}_19.033000_73.029700_AQI.csv`, goodCsv());
   // Not in the agent's naming scheme: poll1 must leave it alone.
   await drop('reading.csv', goodCsv());
 
   // --- poll1 -------------------------------------------------------------
   const poll1 = await runPoll1();
-  check('poll1 files every well-named CSV', poll1.moved === 6, `moved=${poll1.moved}`);
+  check('poll1 files every well-named CSV', poll1.moved === 7, `moved=${poll1.moved}`);
   check('poll1 refuses a name it cannot read', poll1.errors.some((e) => e.startsWith('reading.csv')));
   check('the refused file stays in the inbox', (await fs.readdir(inboxRoot())).includes('reading.csv'));
 
   const filed = await prisma.dataFile.findMany({ orderBy: { receivedAt: 'asc' } });
-  check('poll1 indexes every filed CSV', filed.length === 6, `rows=${filed.length}`);
+  check('poll1 indexes every filed CSV', filed.length === 7, `rows=${filed.length}`);
 
   for (const row of filed) {
     const parsed = parseAqiFileName(row.deliveredName!)!;
@@ -132,6 +135,21 @@ async function main() {
   const auto = await prisma.company.findUnique({ where: { siteName: 'NEWCO777' } });
   check('poll1 registers a company it has never seen', Boolean(auto));
 
+  // --- the station's position --------------------------------------------
+  const located_ = filed.find((r) => r.deliveredName?.includes('_19.033000_'))!;
+  const parsedLocated = parseAqiFileName(located_.deliveredName!)!;
+  check('a name carrying the station reaches the same tree as one without',
+    located_.relativePath === `ABCD123/${parsedLocated.dateFolder}/${parsedLocated.timeStem}.csv`,
+    located_.relativePath);
+  check('  and its position is stored',
+    located_.latitude === 19.033 && located_.longitude === 73.0297,
+    `${located_.latitude}, ${located_.longitude}`);
+  const plain = filed.find((r) => r.deliveredName === `ABCD123_${good}_AQI.csv`)!;
+  check('  a file sent without one stores none',
+    plain.latitude === null && plain.longitude === null);
+  check('  a position past the pole is not stored',
+    parseAqiFileName('ABCD123_21_09_2026_11-30-24_91.000000_73.029700_AQI.csv')?.latitude === null);
+
   // --- poll2 -------------------------------------------------------------
   await runPoll2();
   const done = await prisma.dataFile.findMany({ orderBy: { receivedAt: 'asc' } });
@@ -143,7 +161,7 @@ async function main() {
 
   const archived = done.filter((f) => f.pollStatus === 'ARCHIVED');
   const failed = done.filter((f) => f.pollStatus === 'FAILED');
-  check('the good files are archived', archived.length === 3, `archived=${archived.length}`);
+  check('the good files are archived', archived.length === 4, `archived=${archived.length}`);
   check('the three broken files failed', failed.length === 3, `failed=${failed.length}`);
   check('an archived file reads CORRECT', archived.every((f) => f.fileStatus?.startsWith('CORRECT')));
 
