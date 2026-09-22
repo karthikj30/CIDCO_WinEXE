@@ -41,6 +41,40 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    // What each company has actually delivered.
+    //
+    // The handshake's own sftpUploads only count files that came through
+    // CIDCO's intake. An agent uploading to a plain SFTP folder is picked up
+    // by the poll worker and never touches it, so an account doing exactly
+    // what it should showed "never used" — which is the opposite of the truth
+    // and the one thing this page exists to say.
+    const companyIds = rows.map((h) => h.company?.companyId).filter(Boolean) as string[];
+    const deliveries = companyIds.length
+      ? await prisma.dataFile.findMany({
+          where: { companyId: { in: companyIds } },
+          orderBy: { receivedAt: 'desc' },
+          select: {
+            companyId: true,
+            fileName: true,
+            deliveredName: true,
+            relativePath: true,
+            sizeBytes: true,
+            rowCount: true,
+            importedCount: true,
+            pollStatus: true,
+            sourceIp: true,
+            receivedAt: true,
+          },
+        })
+      : [];
+
+    const byCompany = new Map<string, typeof deliveries>();
+    for (const d of deliveries) {
+      const list = byCompany.get(d.companyId) ?? [];
+      list.push(d);
+      byCompany.set(d.companyId, list);
+    }
+
     const now = Date.now();
     return ok({
       endpoint: sftpEndpoint(req.headers.get('host')?.split(':')[0]),
@@ -66,6 +100,11 @@ export async function GET(req: NextRequest) {
         uploadCount: h._count.sftpUploads,
         lastUpload: h.sftpUploads[0] ?? null,
         createdAt: h.createdAt,
+        revokedAt: h.revokedAt,
+        /** Everything this company has delivered, newest first. */
+        deliveries: (byCompany.get(h.company?.companyId ?? '') ?? []).slice(0, 10),
+        deliveryCount: (byCompany.get(h.company?.companyId ?? '') ?? []).length,
+        lastDelivery: (byCompany.get(h.company?.companyId ?? '') ?? [])[0] ?? null,
       })),
     });
   } catch (error) {
@@ -177,6 +216,67 @@ export async function POST(req: NextRequest) {
       },
       201,
     );
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+/**
+ * PATCH /api/admin/sftp/accounts
+ *
+ * Revoke an SFTP account, or grant it back. Revoking is the switch CIDCO
+ * needs when an architect's credentials leak or a firm stops being approved —
+ * it should not require deleting the account and losing what it delivered.
+ */
+const patchSchema = z.object({
+  id: z.string().min(1),
+  action: z.enum(['revoke', 'grant']),
+});
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const guard = await requireCidco(req);
+    if ('error' in guard) return guard.error;
+
+    const { id, action } = patchSchema.parse(await req.json());
+    const account = await prisma.architectHandshake.findUnique({ where: { id }, include: { company: true } });
+    if (!account) return fail('No such SFTP account', 404);
+
+    const revoking = action === 'revoke';
+    const updated = await prisma.architectHandshake.update({
+      where: { id },
+      data: revoking
+        ? { status: 'REVOKED', revokedAt: new Date() }
+        : // Granting it back also clears an expiry that has since passed, or
+          // the account would come back already expired and look broken.
+          {
+            status: 'ESTABLISHED',
+            revokedAt: null,
+            establishedAt: account.establishedAt ?? new Date(),
+            credentialExpiresAt:
+              account.credentialExpiresAt.getTime() < Date.now()
+                ? addDays(new Date(), 365)
+                : account.credentialExpiresAt,
+          },
+    });
+
+    await logComm({
+      handshakeId: id,
+      direction: 'ADMIN_TO_ARCHITECT',
+      event: revoking ? 'SFTP_ACCOUNT_REVOKED' : 'SFTP_ACCOUNT_GRANTED',
+      statusCode: 200,
+      detail:
+        `${guard.user.email} ${revoking ? 'revoked' : 'granted'} SFTP access for ` +
+        `${account.company?.companyId ?? account.clientId}`,
+      ip: clientIp(req),
+    }).catch(() => undefined);
+
+    return ok({
+      message: revoking
+        ? `SFTP access revoked for ${account.clientId}. Transfers on it are refused from now on.`
+        : `SFTP access granted for ${account.clientId}.`,
+      account: { id: updated.id, status: updated.status, revokedAt: updated.revokedAt },
+    });
   } catch (error) {
     return handleError(error);
   }

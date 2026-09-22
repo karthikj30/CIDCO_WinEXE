@@ -92,7 +92,10 @@ export type CommEvent =
   // SFTP_FILE_REJECTED directly; these are the ones the web app raises.
   | 'SFTP_CREDENTIALS_ISSUED'
   | 'SFTP_HANDSHAKE_APPROVED'
-  | 'SFTP_HANDSHAKE_REJECTED';
+  | 'SFTP_HANDSHAKE_REJECTED'
+  // An officer turning one account's access off and on again.
+  | 'SFTP_ACCOUNT_REVOKED'
+  | 'SFTP_ACCOUNT_GRANTED';
 
 export async function logComm(params: {
   handshakeId: string | null;
