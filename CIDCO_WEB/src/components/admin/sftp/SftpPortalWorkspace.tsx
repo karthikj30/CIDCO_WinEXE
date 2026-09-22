@@ -5,7 +5,7 @@ import AdminSignIn from '../AdminSignIn';
 import SftpAccountsPanel from './SftpAccountsPanel';
 import SftpCompaniesPanel from './SftpCompaniesPanel';
 import SftpDataPanel from './SftpDataPanel';
-import SftpUploadsPanel from './SftpUploadsPanel';
+import TransfersPanel from './TransfersPanel';
 import { readJson } from '@/lib/fetchJson';
 
 /**
@@ -106,7 +106,7 @@ export default function SftpPortalWorkspace() {
           <AdminSignIn onSignedIn={setAdmin} />
         ) : (
           <>
-            {tab === 'uploads' && <SftpUploadsPanel />}
+            {tab === 'uploads' && <TransfersPanel />}
             {tab === 'data' && <SftpDataPanel />}
             {tab === 'companies' && <SftpCompaniesPanel />}
             {tab === 'accounts' && <SftpAccountsPanel />}
