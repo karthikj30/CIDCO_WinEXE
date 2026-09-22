@@ -79,7 +79,6 @@ export async function GET(req: NextRequest) {
                 sizeBytes: f.sizeBytes,
                 rowCount: f.rowCount,
                 importedCount: f.importedCount,
-                sourceIp: f.sourceIp,
                 receivedAt: f.receivedAt,
                 timestamp: f.timestamp,
                 pollStatus: f.pollStatus,

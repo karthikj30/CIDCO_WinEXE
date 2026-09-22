@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { fail, handleError, ok } from '@/lib/api';
 import { requireCidco } from '@/lib/guards';
-import { normaliseIp, normalisePath } from '@/lib/sftp';
+import { normalisePath } from '@/lib/sftp';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
         companyName: data.companyName.trim(),
         // Stored normalised so a trailing slash or an IPv6-mapped form cannot
         // make a legitimate transfer fail validation later.
-        architectServerIp: normaliseIp(data.architectServerIp),
+        architectServerIp: (data.architectServerIp),
         filePath: normalisePath(data.filePath || ''),
         publicKey: data.publicKey?.trim() || null,
         privateKey: data.privateKey?.trim() || null,

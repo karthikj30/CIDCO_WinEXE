@@ -46,7 +46,6 @@ export async function GET(req: NextRequest) {
       pollStatus: f.pollStatus,
       headline: (f.fileStatus ?? '').split('\n')[0] || null,
       failedStep: (f.fileStatus ?? '').split('\n').find((l) => l.includes('FAILED')) ?? null,
-      sourceIp: f.sourceIp,
       receivedAt: f.receivedAt,
     }));
 

@@ -184,13 +184,12 @@ function allCorrect(steps: IngestionStepResult[]): boolean {
 export async function enqueueInboxFile(params: {
   fileName: string;
   buffer: Buffer;
-  sourceIp: string | null;
   presentedPath: string | null;
   mode: 'DIRECT_SFTP' | 'PORTAL';
   company: Company | null;
   handshakeId: string;
 }) {
-  const { fileName, buffer, sourceIp, presentedPath, mode, company, handshakeId } = params;
+  const { fileName, buffer, presentedPath, mode, company, handshakeId } = params;
   await fs.mkdir(inboxRoot(), { recursive: true });
 
   const parsed = parseAqiFileName(fileName);
@@ -207,13 +206,10 @@ export async function enqueueInboxFile(params: {
       fileName: inboxName,
       storedName: inboxName,
       sizeBytes: buffer.length,
-      sourceIp,
       mode,
       presentedCompanyId: parsed?.companyId ?? company?.companyId ?? null,
-      presentedIp: sourceIp,
       presentedPath,
       companyIdMatch: Boolean(company && parsed && company.companyId === parsed.companyId),
-      ipMatch: false,
       pathMatch: !presentedPath || !company?.filePath,
       validationPassed: false,
       status: 'RECEIVED',
@@ -237,7 +233,6 @@ export async function enqueueInboxFile(params: {
         sizeBytes: buffer.length,
         rowCount: 0,
         importedCount: 0,
-        sourceIp,
         uploadId: upload.id,
         pollStatus: 'INBOX',
         fileStatus: `${INGESTION_STEPS[0]} — OK (queued for poll1)`,
@@ -614,7 +609,6 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
           detail:
             `${row.companyId} ${row.fileName}: stored ${outcome.importedCount}/${outcome.rowCount} readings ` +
             `from ${row.relativePath}`,
-          ip: row.sourceIp,
         },
       }).catch(() => undefined);
 

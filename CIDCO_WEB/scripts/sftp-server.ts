@@ -30,7 +30,6 @@ import {
   homeDirFor,
   isAcceptedFile,
   isSharedSftpLogin,
-  normaliseIp,
   normalisePath,
   parseAgentPath,
   SFTP_PORT,
@@ -174,7 +173,7 @@ async function authorise(username: string, password: string, ip: string | null, 
   }
 
   // The registered server address is the only one data may arrive from.
-  if (normaliseIp(company.architectServerIp) !== normaliseIp(ip)) {
+  if ((company.architectServerIp) !== (ip)) {
     return {
       ok: false,
       reason:
@@ -455,7 +454,6 @@ async function receiveFile(account: Account, handle: WriteHandle, ip: string | n
     const { inboxName } = await enqueueInboxFile({
       fileName,
       buffer,
-      sourceIp: ip,
       presentedPath: handle.dir,
       mode: 'DIRECT_SFTP',
       company,
@@ -501,7 +499,7 @@ async function main() {
   const server = new Server(
     { hostKeys: [key], banner: 'CIDCO AQI Compliance Portal — SFTP intake' },
     (conn: Connection, info) => {
-      const ip = normaliseIp(info.ip);
+      const ip = (info.ip);
       let client = 'unknown SSH client';
       if (info.header?.versions?.software) client = info.header.versions.software;
 

@@ -13,14 +13,11 @@ type Row = {
   rowCount: number;
   importedCount: number;
   failedCount: number;
-  sourceIp: string | null;
   receivedAt: string;
   parsedAt: string | null;
   presentedCompanyId: string | null;
-  presentedIp: string | null;
   presentedPath: string | null;
   companyIdMatch: boolean;
-  ipMatch: boolean;
   pathMatch: boolean;
   validationPassed: boolean;
   rejectionReason: string | null;
@@ -44,7 +41,6 @@ type Detail = Row & {
     passed: boolean;
     reason: string | null;
     companyId: Field;
-    ip: Field;
     filePath: Field;
   };
   handshake: Row['handshake'] & { whitelistedIp: string | null };
@@ -68,7 +64,6 @@ const UPLOAD_STATUS: Record<string, string> = {
 function ValidationTable({ validation }: { validation: Detail['validation'] }) {
   const rows: Array<[string, Field]> = [
     ['Company id', validation.companyId],
-    ['Server IP', validation.ip],
     ['File path', validation.filePath],
   ];
   return (
@@ -247,14 +242,11 @@ export default function SftpUploadsPanel() {
                   <p className="mt-1 text-xs text-slate-500">
                     {u.handshake.company?.companyName ?? u.handshake.architect.name} ·{' '}
                     <span className="font-mono">{u.presentedCompanyId ?? u.handshake.clientId}</span> ·{' '}
-                    {kb(u.sizeBytes)} · from {u.presentedIp ?? u.sourceIp ?? 'unknown'} · {fmt(u.receivedAt)}
+                    {kb(u.sizeBytes)} · {fmt(u.receivedAt)}
                   </p>
                   <p className="mt-1 flex flex-wrap gap-2 text-[11px]">
                     <span className={u.companyIdMatch ? 'text-emerald-700' : 'text-red-700'}>
                       {u.companyIdMatch ? '✓' : '✕'} company id
-                    </span>
-                    <span className={u.ipMatch ? 'text-emerald-700' : 'text-red-700'}>
-                      {u.ipMatch ? '✓' : '✕'} IP
                     </span>
                     <span className={u.pathMatch ? 'text-emerald-700' : 'text-red-700'}>
                       {u.pathMatch ? '✓' : '✕'} file path

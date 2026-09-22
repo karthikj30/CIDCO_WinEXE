@@ -62,7 +62,6 @@ export async function GET(req: NextRequest) {
             rowCount: true,
             importedCount: true,
             pollStatus: true,
-            sourceIp: true,
             receivedAt: true,
           },
         })

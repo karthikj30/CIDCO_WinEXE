@@ -29,7 +29,6 @@ type LogRow = {
   pollStatus: string;
   headline: string | null;
   failedStep: string | null;
-  sourceIp: string | null;
   receivedAt: string;
 };
 
@@ -227,7 +226,6 @@ export default function TransfersPanel() {
                     <th className="px-3 py-2 font-semibold">Filed at</th>
                     <th className="px-3 py-2 font-semibold">Size</th>
                     <th className="px-3 py-2 font-semibold">Rows</th>
-                    <th className="px-3 py-2 font-semibold">From</th>
                     <th className="px-3 py-2 font-semibold">Status</th>
                   </tr>
                 </thead>
@@ -244,7 +242,6 @@ export default function TransfersPanel() {
                           {r.rejectedCount > 0 ? ` · ${r.rejectedCount} rejected` : ''}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-500">{r.sourceIp ?? '—'}</td>
                       <td className="px-3 py-2">
                         <span
                           className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${

@@ -21,7 +21,6 @@ type DataFile = {
   sizeBytes: number;
   rowCount: number;
   importedCount: number;
-  sourceIp: string | null;
   receivedAt: string;
   timestamp: string | null;
   pollStatus: string;
@@ -273,7 +272,6 @@ export default function SftpDataPanel() {
                                               ? ` · ${f.rowCount - f.importedCount} rejected`
                                               : ''}
                                           </span>
-                                          <span className="text-slate-400">from {f.sourceIp ?? '—'}</span>
                                           <span className="text-slate-400">{fmt(f.receivedAt)}</span>
                                           <a
                                             href={`/api/admin/sftp/data/${f.id}/download`}

@@ -276,17 +276,15 @@ export async function parseDataFile(buffer: Buffer, fileName: string): Promise<P
 /** What a transfer presented, to be checked against the company record. */
 export type PresentedTransfer = {
   companyId: string | null;
-  ip: string | null;
   filePath: string | null;
 };
 
 export type TransferValidation = {
   companyIdMatch: boolean;
-  ipMatch: boolean;
   pathMatch: boolean;
   passed: boolean;
   reason: string | null;
-  expected: { companyId: string; ip: string; filePath: string };
+  expected: { companyId: string; filePath: string };
   presented: PresentedTransfer;
 };
 
@@ -302,17 +300,15 @@ export function comparablePath(value: string | null | undefined) {
   return normalisePath(value).replace(/^\/+/, '').toLowerCase();
 }
 
-export function normaliseIp(value: string | null | undefined) {
-  if (!value) return '';
-  const trimmed = value.trim();
-  if (trimmed === '::1') return '127.0.0.1';
-  return trimmed.startsWith('::ffff:') ? trimmed.slice(7) : trimmed;
-}
-
 /**
- * The check CIDCO runs on every transfer: does the company id, the address it
- * came from and (when registered) the path it was taken from match what CIDCO
- * registered for this company?
+ * The check CIDCO runs on every transfer: does the company id and (when
+ * registered) the path it was taken from match what CIDCO registered?
+ *
+ * The address the file came from used to be part of this. It is not recorded
+ * any more: a file dropped into a plain SFTP folder is delivered by the
+ * operating system's own sshd, so the portal never saw that connection and the
+ * column held null for every real delivery — a check that could only ever fail
+ * or be skipped.
  *
  * Path is optional. When the company has no registered file path, or the
  * transfer did not declare one, pathMatch passes — poll1 still files the CSV
@@ -320,22 +316,18 @@ export function normaliseIp(value: string | null | undefined) {
  */
 export function validateTransfer(company: Company, presented: PresentedTransfer): TransferValidation {
   const companyIdMatch = (presented.companyId ?? '').trim() === company.companyId;
-  const ipMatch = normaliseIp(presented.ip) === normaliseIp(company.architectServerIp);
   const registeredPath = comparablePath(company.filePath);
   const presentedPath = comparablePath(presented.filePath);
   const pathMatch =
     registeredPath.length === 0 ||
     presentedPath.length === 0 ||
     presentedPath === registeredPath;
-  const passed = companyIdMatch && ipMatch && pathMatch && company.active;
+  const passed = companyIdMatch && pathMatch && company.active;
 
   const mismatches: string[] = [];
   if (!company.active) mismatches.push('the company registration is inactive');
   if (!companyIdMatch) {
     mismatches.push(`company id "${presented.companyId ?? '—'}" does not match the registered "${company.companyId}"`);
-  }
-  if (!ipMatch) {
-    mismatches.push(`address ${presented.ip ?? '—'} is not the registered server address ${company.architectServerIp}`);
   }
   if (!pathMatch) {
     mismatches.push(`file path "${presented.filePath ?? '—'}" is not the registered path "${company.filePath}"`);
@@ -343,13 +335,11 @@ export function validateTransfer(company: Company, presented: PresentedTransfer)
 
   return {
     companyIdMatch,
-    ipMatch,
     pathMatch,
     passed,
     reason: passed ? null : mismatches.join('; '),
     expected: {
       companyId: company.companyId,
-      ip: company.architectServerIp,
       filePath: company.filePath,
     },
     presented,
@@ -544,16 +534,14 @@ export async function ingestTransfer(params: {
   fileName: string;
   storedName: string;
   buffer: Buffer;
-  sourceIp: string | null;
   /** The path the file was taken from / written to, as presented. */
   presentedPath: string | null;
   mode: TransferMode;
 }) {
-  const { handshake, company, fileName, storedName, buffer, sourceIp, presentedPath, mode } = params;
+  const { handshake, company, fileName, storedName, buffer, presentedPath, mode } = params;
 
   const presented: PresentedTransfer = {
     companyId: company?.companyId ?? null,
-    ip: sourceIp,
     filePath: presentedPath,
   };
 
@@ -562,11 +550,10 @@ export async function ingestTransfer(params: {
     ? validateTransfer(company, presented)
     : {
         companyIdMatch: false,
-        ipMatch: false,
         pathMatch: false,
         passed: false,
         reason: 'These credentials are not linked to a registered company',
-        expected: { companyId: '—', ip: '—', filePath: '—' },
+        expected: { companyId: '\u2014', filePath: '\u2014' },
         presented,
       };
 
@@ -576,13 +563,10 @@ export async function ingestTransfer(params: {
       fileName,
       storedName,
       sizeBytes: buffer.length,
-      sourceIp,
       mode,
       presentedCompanyId: presented.companyId,
-      presentedIp: presented.ip,
       presentedPath: presented.filePath,
       companyIdMatch: validation.companyIdMatch,
-      ipMatch: validation.ipMatch,
       pathMatch: validation.pathMatch,
       validationPassed: validation.passed,
       status: 'RECEIVED',
@@ -638,7 +622,6 @@ export async function ingestTransfer(params: {
             sizeBytes: buffer.length,
             rowCount: outcome.rowCount,
             importedCount: outcome.importedCount,
-            sourceIp,
             uploadId: upload.id,
             pollStatus: 'ARCHIVED',
             fileStatus: 'CORRECT\n(legacy inline ingest)',

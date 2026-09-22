@@ -39,7 +39,6 @@ type Delivery = {
   rowCount: number;
   importedCount: number;
   pollStatus: string;
-  sourceIp: string | null;
   receivedAt: string;
 };
 
@@ -136,7 +135,6 @@ export default function SftpAccountsPanel() {
                 <th className="px-4 py-3 font-medium">SFTP user id</th>
                 <th className="px-4 py-3 font-medium">Company</th>
                 <th className="px-4 py-3 font-medium">Last delivery</th>
-                <th className="px-4 py-3 font-medium">From</th>
                 <th className="px-4 py-3 font-medium">Path delivered to</th>
                 <th className="px-4 py-3 font-medium">Transfers</th>
                 <th className="px-4 py-3 font-medium">Access</th>
@@ -145,10 +143,10 @@ export default function SftpAccountsPanel() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading && rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-500">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">Loading…</td></tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
                     No SFTP credentials issued yet. Register a company, then issue its credentials.
                   </td>
                 </tr>
@@ -180,24 +178,6 @@ export default function SftpAccountsPanel() {
                             </>
                           ) : (
                             <span className="text-slate-400">never</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-600">
-                          {a.lastDelivery?.sourceIp ? (
-                            a.lastDelivery.sourceIp
-                          ) : (
-                            /* A file dropped into a plain SFTP folder is
-                               delivered by the operating system's own sshd;
-                               the portal never sees the connection, so there
-                               is no address to record. Saying so beats a bare
-                               dash that reads like a bug. */
-                            <span
-                              className="text-slate-400"
-                              title="Delivered over plain SFTP, so the portal never saw the connection. Only files sent to CIDCO's own intake carry a source address."
-                            >
-                              not seen ·{' '}
-                              <span className="not-italic">{a.company?.architectServerIp || 'no IP registered'}</span>
-                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 break-all font-mono text-xs text-slate-600">
@@ -246,7 +226,7 @@ export default function SftpAccountsPanel() {
 
                       {expanded && (
                         <tr>
-                          <td colSpan={8} className="bg-slate-50 px-4 py-3">
+                          <td colSpan={7} className="bg-slate-50 px-4 py-3">
                             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                               Last transactions · user id{' '}
                               <span className="font-mono normal-case text-slate-700">{a.username}</span> · company{' '}
@@ -263,7 +243,6 @@ export default function SftpAccountsPanel() {
                                     <th className="py-1 pr-4 font-semibold">Received</th>
                                     <th className="py-1 pr-4 font-semibold">Delivered as</th>
                                     <th className="py-1 pr-4 font-semibold">Filed at</th>
-                                    <th className="py-1 pr-4 font-semibold">From</th>
                                     <th className="py-1 pr-4 font-semibold">Size</th>
                                     <th className="py-1 pr-4 font-semibold">Rows</th>
                                     <th className="py-1 font-semibold">Status</th>
@@ -277,7 +256,6 @@ export default function SftpAccountsPanel() {
                                         {d.deliveredName ?? d.fileName}
                                       </td>
                                       <td className="py-1 pr-4 font-mono text-slate-500">{d.relativePath}</td>
-                                      <td className="py-1 pr-4 font-mono text-slate-500">{d.sourceIp ?? 'not seen'}</td>
                                       <td className="whitespace-nowrap py-1 pr-4 text-slate-500">{kb(d.sizeBytes)}</td>
                                       <td className="whitespace-nowrap py-1 pr-4 text-slate-600">
                                         {d.importedCount}/{d.rowCount}

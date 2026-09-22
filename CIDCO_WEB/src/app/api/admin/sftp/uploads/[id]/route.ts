@@ -53,7 +53,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         importedCount: upload.importedCount,
         failedCount: upload.failedCount,
         errors: upload.errors ?? [],
-        sourceIp: upload.sourceIp,
         receivedAt: upload.receivedAt,
         parsedAt: upload.parsedAt,
         mode: upload.mode,
@@ -66,11 +65,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             presented: upload.presentedCompanyId,
             expected: upload.handshake.company?.companyId ?? null,
             match: upload.companyIdMatch,
-          },
-          ip: {
-            presented: upload.presentedIp,
-            expected: upload.handshake.company?.architectServerIp ?? null,
-            match: upload.ipMatch,
           },
           filePath: {
             presented: upload.presentedPath,

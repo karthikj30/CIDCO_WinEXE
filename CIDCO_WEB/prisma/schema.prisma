@@ -441,11 +441,9 @@ model SftpUpload {
   // --- CIDCO-side validation, run on every single transfer -----------------
   // What the transfer presented…
   presentedCompanyId String?
-  presentedIp        String?
   presentedPath      String?
   // …and whether each matched the company record CIDCO registered beforehand.
   companyIdMatch     Boolean @default(false)
-  ipMatch            Boolean @default(false)
   pathMatch          Boolean @default(false)
   validationPassed   Boolean @default(false)
   rejectionReason    String?
@@ -457,7 +455,6 @@ model SftpUpload {
   importedCount Int              @default(0)
   failedCount   Int              @default(0)
   errors        Json? // per-row rejection reasons
-  sourceIp      String?
   receivedAt    DateTime         @default(now())
   parsedAt      DateTime?
 
@@ -508,7 +505,6 @@ model DataFile {
   sizeBytes       Int
   rowCount        Int               @default(0)
   importedCount   Int               @default(0)
-  sourceIp        String?
   uploadId        String?           @unique
   /// Parsed AQI rows (JSON) after poll2 stores them.
   aqiData         Json?

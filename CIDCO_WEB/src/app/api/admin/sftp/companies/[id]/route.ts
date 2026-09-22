@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { fail, handleError, ok } from '@/lib/api';
 import { requireCidco } from '@/lib/guards';
-import { normaliseIp, normalisePath } from '@/lib/sftp';
+import { normalisePath } from '@/lib/sftp';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { id },
       data: {
         companyName: body.companyName ?? undefined,
-        architectServerIp: body.architectServerIp ? normaliseIp(body.architectServerIp) : undefined,
+        architectServerIp: body.architectServerIp ? (body.architectServerIp) : undefined,
         filePath: body.filePath ? normalisePath(body.filePath) : undefined,
         notes: body.notes === undefined ? undefined : body.notes,
         active: body.active ?? undefined,

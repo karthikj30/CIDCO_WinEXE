@@ -7,7 +7,6 @@ import {
   hashesEqual,
   isAcceptedFile,
   isSharedSftpLogin,
-  normaliseIp,
   normalisePath,
   sftpEndpoint,
   sha256,
@@ -77,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     const endpoint = sftpEndpoint(req.headers.get('host')?.split(':')[0]);
-    if (designatedIp && normaliseIp(designatedIp) !== normaliseIp(endpoint.designatedIp)) {
+    if (designatedIp && (designatedIp) !== (endpoint.designatedIp)) {
       return fail(
         `${designatedIp} is not CIDCO's designated address for this channel. Use ${endpoint.designatedIp}.`,
         422,
@@ -86,13 +85,11 @@ export async function POST(req: NextRequest) {
 
     const company = handshake.company;
     const presentedPath = normalisePath(declaredPath || company?.filePath || '');
-    const sourceIp = normaliseIp(clientIp(req));
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const queued = await enqueueInboxFile({
       fileName: file.name,
       buffer,
-      sourceIp,
       presentedPath,
       mode: 'PORTAL',
       company,
