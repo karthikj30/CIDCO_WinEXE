@@ -57,7 +57,7 @@ export default function Gateway() {
   const [checking, setChecking] = useState(true);
   const [role, setRole] = useState<Role>('CIDCO_OFFICER');
   const [mode, setMode] = useState<Mode>('signin');
-  const [form, setForm] = useState({ email: '', password: '', name: '', firmName: '', councilRegNo: '', phone: '' });
+  const [form, setForm] = useState({ email: '', password: '', name: '', firmName: '', councilRegNo: '', phone: '', signupCode: '' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -88,19 +88,34 @@ export default function Gateway() {
     setBusy(true);
     setError(null);
     try {
-      const path = mode === 'signin' ? '/api/auth/login' : '/api/auth/register';
+      // Signing up as an officer goes to its own endpoint. /api/auth/register
+      // makes architects and nothing else — it ignored the role it was sent,
+      // so picking "CIDCO officer" here quietly produced an architect account
+      // and dropped the new officer on the architect dashboard.
+      const officerSignup = mode === 'signup' && role === 'CIDCO_OFFICER';
+      const path = mode === 'signin'
+        ? '/api/auth/login'
+        : officerSignup
+          ? '/api/auth/officer-signup'
+          : '/api/auth/register';
       const body =
         mode === 'signin'
           ? { email: form.email, password: form.password }
-          : {
-              email: form.email,
-              password: form.password,
-              name: form.name,
-              role,
-              firmName: form.firmName || undefined,
-              councilRegNo: form.councilRegNo || undefined,
-              phone: form.phone || undefined,
-            };
+          : officerSignup
+            ? {
+                email: form.email,
+                password: form.password,
+                name: form.name,
+                signupCode: form.signupCode || undefined,
+              }
+            : {
+                email: form.email,
+                password: form.password,
+                name: form.name,
+                firmName: form.firmName || undefined,
+                councilRegNo: form.councilRegNo || undefined,
+                phone: form.phone || undefined,
+              };
       const res = await fetch(path, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -119,7 +134,7 @@ export default function Gateway() {
   async function signOut() {
     await fetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
-    setForm({ email: '', password: '', name: '', firmName: '', councilRegNo: '', phone: '' });
+    setForm({ email: '', password: '', name: '', firmName: '', councilRegNo: '', phone: '', signupCode: '' });
   }
 
   if (checking) {
@@ -290,6 +305,20 @@ export default function Gateway() {
               className={INPUT}
             />
           </div>
+
+          {mode === 'signup' && role === 'CIDCO_OFFICER' && (
+            <div>
+              <label htmlFor="g-code" className="mb-1 block text-sm font-medium text-slate-700">
+                CIDCO sign-up code
+              </label>
+              <input id="g-code" value={form.signupCode} onChange={set('signupCode')} className={INPUT} />
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                An officer reads every company&rsquo;s data, so this is not an open form. Leave it blank
+                only when you are the very first officer on a fresh portal; after that CIDCO issues the
+                code.
+              </p>
+            </div>
+          )}
 
           {mode === 'signup' && role === 'ARCHITECT' && (
             <div className="grid gap-4 sm:grid-cols-2">
