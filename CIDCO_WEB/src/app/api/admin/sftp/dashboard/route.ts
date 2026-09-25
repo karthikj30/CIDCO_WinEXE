@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { handleError, ok } from '@/lib/api';
 import { requireCidco } from '@/lib/guards';
 import {
-  AQI_BANDS, DEFAULT_RADIUS_METRES, POLLUTANTS,
+  AQI_BANDS, DEFAULT_RADIUS_METRES, MAX_COMPARED_SITES, POLLUTANTS, SITE_COLORS,
   bandOf, checkLocation, reportingStatus,
   type AqiBandKey,
 } from '@/lib/aqi';
@@ -215,6 +215,33 @@ export async function GET(req: NextRequest) {
       points: ordered(pollutantBuckets.get(p.key)!),
     })).filter((s) => s.points.length > 0);
 
+    // --- AQI per site over time, for comparing sites against each other ---
+    // Same buckets as the single-site trend, kept per site so the lines share
+    // one scale and one set of moments.
+    const perSite = new Map<string, Map<string, Bucket>>();
+    for (const r of scoped) {
+      const id = r.companyRecordId!;
+      const key = stamp(r.measuredAt);
+      const map = perSite.get(id) ?? new Map<string, Bucket>();
+      const b = map.get(key) ?? { at: key, sum: 0, n: 0 };
+      b.sum += r.aqiValue;
+      b.n += 1;
+      map.set(key, b);
+      perSite.set(id, map);
+    }
+
+    const comparison = sites
+      .filter((s) => perSite.has(s.id))
+      // Busiest first, so a capped chart shows the sites with most to say.
+      .sort((a, b) => b.readingCount - a.readingCount)
+      .slice(0, MAX_COMPARED_SITES)
+      .map((s, i) => ({
+        key: s.id,
+        label: s.siteName,
+        color: SITE_COLORS[i % SITE_COLORS.length],
+        points: ordered(perSite.get(s.id)!),
+      }));
+
     // --- 4. Category distribution per site --------------------------------
     const distribution = sites.map((s) => {
       const counts = Object.fromEntries(AQI_BANDS.map((b) => [b.key, 0])) as Record<AqiBandKey, number>;
@@ -286,6 +313,7 @@ export async function GET(req: NextRequest) {
       sites,
       aqiTrend,
       pollutantTrend,
+      comparison,
       distribution,
       contribution,
       filters: {
@@ -320,6 +348,7 @@ function empty(base: {
     sites: [],
     aqiTrend: [],
     pollutantTrend: [],
+    comparison: [],
     distribution: [],
     contribution: [],
     filters: {

@@ -786,13 +786,25 @@ export type IngestionHealth = {
   /** When the worker last finished a tick, if it has ever written one. */
   lastRunAt: string | null;
   secondsSinceLastRun: number | null;
-  /** Files sitting in the inbox right now, waiting to be filed. */
+  /** Files poll1 can read the name of, waiting to be filed on the next tick. */
   waiting: number;
+  /**
+   * Files poll1 has refused and always will — the name is not in the agent's
+   * format. They need someone to look at them; no amount of polling helps.
+   */
+  unfilable: string[];
   /** The configured tick, so "overdue" means something. */
   intervalMs: number;
   /**
-   * The worker looks stopped: it has not ticked in several intervals, or it
-   * has never ticked at all while files are waiting.
+   * How much it matters:
+   *   running — the worker is ticking
+   *   idle    — it is not, but nothing is waiting, so nothing is stuck
+   *   blocked — it is not, and deliveries are piling up unstored
+   */
+  severity: 'running' | 'idle' | 'blocked';
+  /**
+   * The worker looks stopped AND files are waiting behind it. Kept as the
+   * alarm flag; `severity` carries the quieter case.
    */
   stalled: boolean;
   inboxDir: string;
@@ -801,10 +813,22 @@ export type IngestionHealth = {
 export async function ingestionHealth(): Promise<IngestionHealth> {
   const intervalMs = Number(process.env.POLL_INTERVAL_MS || 15_000);
 
+  // Two different things sit in an inbox, and only one of them is the poll
+  // worker's fault.
+  //
+  //   waiting    — poll1 can read the name and will file it on its next tick
+  //   unfilable  — poll1 has already refused the name and always will
+  //
+  // Counting them together meant one badly named file raised "deliveries are
+  // waiting" for ever, on a portal where nothing was actually stuck. An
+  // officer who sees that warning every day stops reading it.
   let waiting = 0;
+  let unfilable: string[] = [];
   try {
     const entries = await fs.readdir(inboxRoot(), { withFileTypes: true });
-    waiting = entries.filter((e) => e.isFile() && isAcceptedFile(e.name)).length;
+    const files = entries.filter((e) => e.isFile() && isAcceptedFile(e.name)).map((e) => e.name);
+    waiting = files.filter((name) => parseAqiFileName(name) !== null).length;
+    unfilable = files.filter((name) => parseAqiFileName(name) === null);
   } catch {
     // No inbox yet is not a fault; nothing has been delivered.
   }
@@ -822,8 +846,22 @@ export async function ingestionHealth(): Promise<IngestionHealth> {
 
   // Several intervals, not one: a slow tick on a big file is not a fault.
   const overdueAfter = Math.max(60, (intervalMs / 1000) * 4);
-  const stalled =
-    secondsSinceLastRun === null ? waiting > 0 : secondsSinceLastRun > overdueAfter;
+  const stopped = secondsSinceLastRun === null || secondsSinceLastRun > overdueAfter;
 
-  return { lastRunAt, secondsSinceLastRun, waiting, intervalMs, stalled, inboxDir: inboxRoot() };
+  // A stopped worker with nothing waiting is worth saying once, quietly; it is
+  // not a fault, because nothing is stuck. It only becomes one when files are
+  // piling up behind it — that is data CIDCO was sent and has not stored.
+  const severity: IngestionHealth['severity'] =
+    stopped && waiting > 0 ? 'blocked' : stopped ? 'idle' : 'running';
+
+  return {
+    lastRunAt,
+    secondsSinceLastRun,
+    waiting,
+    unfilable,
+    intervalMs,
+    stalled: severity === 'blocked',
+    severity,
+    inboxDir: inboxRoot(),
+  };
 }

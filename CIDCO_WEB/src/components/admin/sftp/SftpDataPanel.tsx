@@ -51,8 +51,10 @@ type Health = {
   lastRunAt: string | null;
   secondsSinceLastRun: number | null;
   waiting: number;
+  unfilable: string[];
   intervalMs: number;
   stalled: boolean;
+  severity: 'running' | 'idle' | 'blocked';
   inboxDir: string;
 };
 
@@ -137,21 +139,17 @@ export default function SftpDataPanel() {
         inbox while this page keeps showing the last thing that was ingested,
         with nothing to say anything is wrong.
       */}
-      {health?.stalled && (
+      {health?.severity === 'blocked' && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="font-semibold">
-            The ingestion poll worker does not look like it is running.
+            Deliveries are waiting and the poll worker is not picking them up.
           </p>
           <p className="mt-1">
-            {health.waiting > 0
-              ? `${health.waiting} file${health.waiting === 1 ? '' : 's'} ${
-                  health.waiting === 1 ? 'is' : 'are'
-                } waiting in ${health.inboxDir} and nothing is picking ${
-                  health.waiting === 1 ? 'it' : 'them'
-                } up.`
-              : `Nothing has been ingested recently, and the inbox ${health.inboxDir} is empty.`}{' '}
+            {`${health.waiting} file${health.waiting === 1 ? '' : 's'} ${
+              health.waiting === 1 ? 'is' : 'are'
+            } sitting in ${health.inboxDir} unstored.`}{' '}
             {health.lastRunAt
-              ? `Its last run was ${Math.round((health.secondsSinceLastRun ?? 0) / 60)} minute(s) ago.`
+              ? `The worker last ran ${Math.round((health.secondsSinceLastRun ?? 0) / 60)} minute(s) ago.`
               : 'It has not run at all since the data folder was created.'}
           </p>
           <p className="mt-2 font-mono text-xs">
@@ -162,7 +160,43 @@ export default function SftpDataPanel() {
         </div>
       )}
 
-      {health && !health.stalled && health.lastRunAt && (
+      {/*
+        A name poll1 cannot read is a separate problem from a stopped worker:
+        polling harder will never file it, so it gets its own line and does
+        not keep the backlog warning permanently lit.
+      */}
+      {health && health.unfilable.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            {health.unfilable.length} file{health.unfilable.length === 1 ? '' : 's'} in the inbox
+            cannot be filed.
+          </p>
+          <p className="mt-1">
+            The name is not in the agent&rsquo;s format
+            (<code className="font-mono text-xs">siteName_dd_mm_yyyy_hh-mm-ss[_lat_lon]_AQI.csv</code>),
+            so poll1 will not take {health.unfilable.length === 1 ? 'it' : 'them'} however long it
+            runs. Rename or remove {health.unfilable.length === 1 ? 'it' : 'them'} in{' '}
+            <code className="font-mono text-xs">{health.inboxDir}</code>.
+          </p>
+          <p className="mt-2 font-mono text-xs">{health.unfilable.slice(0, 5).join(', ')}
+            {health.unfilable.length > 5 ? `, +${health.unfilable.length - 5} more` : ''}</p>
+        </div>
+      )}
+
+      {/*
+        The worker is off but nothing is waiting: everything delivered so far
+        is stored, so this is a note rather than an alarm. Saying it in amber
+        every time an officer opens the page taught them to ignore amber.
+      */}
+      {health?.severity === 'idle' && (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600">
+          <span className="font-semibold text-slate-700">Poll worker is not running.</span>{' '}
+          Nothing is waiting, so nothing is stuck — but a new delivery will sit in the inbox until it
+          is started: <code className="font-mono">pm2 start npm --name cidco-poll -- run poll</code>
+        </p>
+      )}
+
+      {health?.severity === 'running' && health.lastRunAt && (
         <p className="text-xs text-slate-500">
           Poll worker last ran{' '}
           {health.secondsSinceLastRun !== null && health.secondsSinceLastRun < 90

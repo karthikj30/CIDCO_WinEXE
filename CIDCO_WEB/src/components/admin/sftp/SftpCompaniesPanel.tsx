@@ -36,6 +36,9 @@ type Company = {
   department: { id: string; name: string } | null;
   node: { id: string; name: string } | null;
   notes: string | null;
+  registeredLatitude: number | null;
+  registeredLongitude: number | null;
+  permittedRadiusMetres: number;
   active: boolean;
   createdAt: string;
   credentials: Credential[];
@@ -58,6 +61,9 @@ const EMPTY = {
   departmentId: '',
   nodeId: '',
   notes: '',
+  registeredLatitude: '',
+  registeredLongitude: '',
+  permittedRadiusMetres: '',
 };
 
 export default function SftpCompaniesPanel() {
@@ -157,6 +163,9 @@ export default function SftpCompaniesPanel() {
       departmentId: c.department?.id ?? '',
       nodeId: c.node?.id ?? '',
       notes: c.notes ?? '',
+      registeredLatitude: c.registeredLatitude?.toString() ?? '',
+      registeredLongitude: c.registeredLongitude?.toString() ?? '',
+      permittedRadiusMetres: c.permittedRadiusMetres?.toString() ?? '',
     });
     setNotice(null);
     setError(null);
@@ -190,6 +199,9 @@ export default function SftpCompaniesPanel() {
             departmentId: form.departmentId,
             nodeId: form.nodeId,
             notes: form.notes,
+            registeredLatitude: form.registeredLatitude === '' ? null : form.registeredLatitude,
+            registeredLongitude: form.registeredLongitude === '' ? null : form.registeredLongitude,
+            ...(form.permittedRadiusMetres ? { permittedRadiusMetres: form.permittedRadiusMetres } : {}),
             // Left blank means "keep the stored one", not "wipe it".
             ...(form.privateKey ? { privateKey: form.privateKey } : {}),
           }
@@ -206,6 +218,9 @@ export default function SftpCompaniesPanel() {
             departmentId: form.departmentId || undefined,
             nodeId: form.nodeId || undefined,
             notes: form.notes || undefined,
+            registeredLatitude: form.registeredLatitude || undefined,
+            registeredLongitude: form.registeredLongitude || undefined,
+            permittedRadiusMetres: form.permittedRadiusMetres || undefined,
           };
       const res = await fetch(
         editingId ? `/api/admin/sftp/companies/${editingId}` : '/api/admin/sftp/companies',
@@ -396,6 +411,38 @@ export default function SftpCompaniesPanel() {
             </div>
 
             <div className="sm:col-span-2">
+              <p className={LABEL}>Registered position</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <input
+                  aria-label="Registered latitude"
+                  value={form.registeredLatitude}
+                  onChange={set('registeredLatitude')}
+                  className={INPUT}
+                  placeholder="latitude, e.g. 19.033000"
+                />
+                <input
+                  aria-label="Registered longitude"
+                  value={form.registeredLongitude}
+                  onChange={set('registeredLongitude')}
+                  className={INPUT}
+                  placeholder="longitude, e.g. 73.029700"
+                />
+                <input
+                  aria-label="Permitted radius in metres"
+                  value={form.permittedRadiusMetres}
+                  onChange={set('permittedRadiusMetres')}
+                  className={INPUT}
+                  placeholder="radius in metres (500)"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Where CIDCO says the site is. The agent reports where each file was actually sent
+                from, and the monitoring map measures the distance between the two — a delivery
+                further out than this radius is flagged.
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
               <label htmlFor="co-addr" className={LABEL}>Address</label>
               <input id="co-addr" value={form.address} onChange={set('address')} className={INPUT} placeholder="Plot 12, Sector 4, Kharghar, Navi Mumbai" />
             </div>
@@ -472,7 +519,8 @@ export default function SftpCompaniesPanel() {
                 <th className="whitespace-nowrap px-3 py-2 font-semibold">Node</th>
                 <th className="whitespace-nowrap px-3 py-2 font-semibold">Designated path</th>
                 <th className="whitespace-nowrap px-3 py-2 font-semibold">Mobile</th>
-                <th className="whitespace-nowrap px-3 py-2 font-semibold">Keys</th>
+                <th className="whitespace-nowrap px-3 py-2 font-semibold">Public key</th>
+                <th className="whitespace-nowrap px-3 py-2 font-semibold">Private key</th>
                 <th className="whitespace-nowrap px-3 py-2 font-semibold">Status</th>
                 {/* Pinned so the actions stay reachable however far the table
                     is scrolled. */}
@@ -489,13 +537,20 @@ export default function SftpCompaniesPanel() {
                     <div className="font-semibold text-slate-900">{c.siteName}</div>
                     <div className="text-xs text-slate-500">{c.architectName || <Dash />}</div>
                   </td>
-                  <td className="px-3 py-2">
-                    <div className="font-mono text-xs text-slate-700">{c.userId || <Dash />}</div>
-                    <div className="text-xs text-slate-500">{c.email || <Dash />}</div>
+                  {/* A cuid is 25 characters of no interest until you need
+                      the whole thing, so it is truncated with the full value
+                      on hover — it was pushing the key columns off screen. */}
+                  <td className="max-w-[150px] px-3 py-2">
+                    <div className="truncate font-mono text-xs text-slate-700" title={c.userId ?? ''}>
+                      {c.userId || <Dash />}
+                    </div>
+                    <div className="truncate text-xs text-slate-500" title={c.email ?? ''}>
+                      {c.email || <Dash />}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600">{c.department?.name || <Dash />}</td>
                   <td className="px-3 py-2 text-xs text-slate-600">{c.node?.name || <Dash />}</td>
-                  <td className="max-w-[240px] px-3 py-2">
+                  <td className="max-w-[180px] px-3 py-2">
                     <div className="truncate font-mono text-xs text-slate-600" title={c.designatedPath}>
                       {c.designatedPath || <Dash />}
                     </div>
@@ -504,20 +559,24 @@ export default function SftpCompaniesPanel() {
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{c.mobile || <Dash />}</td>
+                  <td className="max-w-[150px] px-3 py-2">
+                    <div className="truncate font-mono text-xs text-slate-600" title={c.publicKey ?? ''}>
+                      {c.publicKey || <Dash />}
+                    </div>
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 text-xs">
-                    {c.publicKey ? (
-                      <span
-                        className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700"
-                        title={c.publicKey}
-                      >
-                        public
-                      </span>
-                    ) : null}
-                    {/* Masked by the API; a stored private key never reaches a browser. */}
+                    {/*
+                      The API masks it, so what arrives here is bullets, never
+                      the key. Showing whether one is held is the useful part;
+                      handing a stored private key to a browser is not.
+                    */}
                     {c.privateKey ? (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">private</span>
-                    ) : null}
-                    {!c.publicKey && !c.privateKey ? <Dash /> : null}
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
+                        stored
+                      </span>
+                    ) : (
+                      <Dash />
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <span

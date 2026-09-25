@@ -53,11 +53,19 @@ function pointOf(s: MapSite): [number, number] | null {
   if (s.reported.latitude !== null && s.reported.longitude !== null) {
     return [s.reported.latitude, s.reported.longitude];
   }
+  return registeredOf(s);
+}
+
+function registeredOf(s: MapSite): [number, number] | null {
   if (s.registered.latitude !== null && s.registered.longitude !== null) {
     return [s.registered.latitude, s.registered.longitude];
   }
   return null;
 }
+
+/** Navi Mumbai, where CIDCO's nodes are, for a map with nothing to frame yet. */
+const HOME: [number, number] = [19.033, 73.0297];
+const HOME_ZOOM = 10;
 
 const fmt = (d: string | null) =>
   d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
@@ -78,7 +86,7 @@ export default function SiteMap({ sites }: { sites: MapSite[] }) {
       const L = (await import('leaflet')).default;
       if (cancelled || !holder.current || map.current) return;
 
-      map.current = L.map(holder.current, { scrollWheelZoom: false }).setView([19.033, 73.0297], 10);
+      map.current = L.map(holder.current, { scrollWheelZoom: false }).setView(HOME, HOME_ZOOM);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
         maxZoom: 19,
@@ -133,9 +141,24 @@ export default function SiteMap({ sites }: { sites: MapSite[] }) {
         marker.on('click', () => setSelected(s));
       }
 
-      if (placed.length > 0) {
+      // Frame the registered positions, not the reported ones.
+      //
+      // A delivery can report anywhere — a test file named "…_1_2_AQI.csv"
+      // parses as 1°N 2°E, in the Atlantic — and framing that pulls the whole
+      // map off Navi Mumbai and hides every real site. Where CIDCO registered
+      // its sites is the fixed, trustworthy frame; a marker that lands outside
+      // it is the finding, and the mismatch count and the table both say so.
+      const frame = placed.map((s) => registeredOf(s)).filter((p): p is [number, number] => p !== null);
+      if (frame.length > 0) {
+        map.current!.fitBounds(frame, { padding: [40, 40], maxZoom: 14 });
+      } else if (placed.length > 0) {
         map.current!.fitBounds(placed.map((s) => pointOf(s)!), { padding: [40, 40], maxZoom: 14 });
+      } else {
+        map.current!.setView(HOME, HOME_ZOOM);
       }
+      // Leaflet measures its box on creation; the card is still laying out at
+      // that point, so a first paint can come out a sliver tall.
+      map.current!.invalidateSize();
     })();
   }, [placed, ready]);
 

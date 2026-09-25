@@ -4,13 +4,13 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { readJson } from '@/lib/fetchJson';
 import {
-  AQI_BANDS, AQI_COLOR, BAND_STATUS_COLOR, POLLUTANTS, REPORTING,
+  AQI_BANDS, AQI_COLOR, BAND_STATUS_COLOR, MAX_COMPARED_SITES, POLLUTANTS, REPORTING,
   bandLabel, type AqiBandKey, type PollutantKey, type ReportingKey,
 } from '@/lib/aqi';
 import {
   ChartCard, ColumnChart, Empty, StackedBandChart, TrendChart,
   type Column, type Series,
-} from './DashboardCharts';
+} from './AmCharts';
 import type { MapSite } from './SiteMap';
 
 // Leaflet only runs in a browser, so the map is never part of the server render.
@@ -35,6 +35,7 @@ type Dashboard = {
   sites: MapSite[];
   aqiTrend: Array<{ at: string; value: number }>;
   pollutantTrend: Array<{ key: string; label: string; color: string; points: Array<{ at: string; value: number }> }>;
+  comparison: Array<{ key: string; label: string; color: string; points: Array<{ at: string; value: number }> }>;
   distribution: Array<{ siteName: string; counts: Record<AqiBandKey, number>; total: number }>;
   contribution: Array<{
     siteName: string;
@@ -275,6 +276,24 @@ export default function DashboardPanel() {
         </ul>
       </ChartCard>
 
+      {/* --- AQI across sites, compared --- */}
+      <ChartCard
+        title="AQI across sites"
+        subtitle="One line per site on a single shared scale, so the sites can be read against each other rather than one at a time. Each site keeps its colour as filters change."
+      >
+        {data && data.comparison.length > 0 ? (
+          <TrendChart series={data.comparison as Series[]} height={320} />
+        ) : (
+          <Empty note="No readings in this window." />
+        )}
+        {data && data.comparison.length === MAX_COMPARED_SITES && (
+          <p className="mt-2 text-center text-xs text-slate-400">
+            Showing the {MAX_COMPARED_SITES} busiest sites. Filter by node or department to compare a
+            different set.
+          </p>
+        )}
+      </ChartCard>
+
       {/* --- 1 & 2. Trends, for one site --- */}
       <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
@@ -302,7 +321,7 @@ export default function DashboardPanel() {
         >
           {siteTrend && siteTrend.aqiTrend.length > 0 ? (
             <TrendChart
-              bucket={siteTrend.bucket}
+              fill
               series={[{ key: 'aqi', label: 'AQI', color: AQI_COLOR, points: siteTrend.aqiTrend }]}
             />
           ) : (
@@ -335,7 +354,6 @@ export default function DashboardPanel() {
         >
           {siteTrend && siteTrend.pollutantTrend.length > 0 ? (
             <TrendChart
-              bucket={siteTrend.bucket}
               series={siteTrend.pollutantTrend.filter((s) => shown.includes(s.key as PollutantKey)) as Series[]}
             />
           ) : (

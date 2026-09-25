@@ -28,6 +28,9 @@ const patchSchema = z.object({
   departmentId: text(40),
   nodeId: text(40),
   notes: text(300),
+  registeredLatitude: z.coerce.number().min(-90).max(90).nullable().optional(),
+  registeredLongitude: z.coerce.number().min(-180).max(180).nullable().optional(),
+  permittedRadiusMetres: z.coerce.number().int().min(10).max(50_000).optional(),
   active: z.boolean().optional(),
 });
 
@@ -73,6 +76,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         departmentId: blank(body.departmentId),
         nodeId: blank(body.nodeId),
         notes: blank(body.notes),
+        registeredLatitude: body.registeredLatitude === undefined ? undefined : body.registeredLatitude,
+        registeredLongitude: body.registeredLongitude === undefined ? undefined : body.registeredLongitude,
+        permittedRadiusMetres: body.permittedRadiusMetres ?? undefined,
         active: body.active ?? undefined,
       },
       include: { department: true, node: true },

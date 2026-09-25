@@ -91,6 +91,22 @@ export const POLLUTANTS = [
 
 export type PollutantKey = (typeof POLLUTANTS)[number]['key'];
 
+/**
+ * Colours for comparing sites against each other.
+ *
+ * The documented categorical order, taken in sequence. A site keeps its colour
+ * however many are on screen — colour follows the site, never its rank, so a
+ * filter that removes one does not repaint the survivors. Past eight, the
+ * chart stops adding lines rather than inventing a ninth hue.
+ */
+export const SITE_COLORS = [
+  '#2a78d6', '#eb6834', '#1baf7a', '#eda100',
+  '#e87ba4', '#008300', '#4a3aa7', '#e34948',
+] as const;
+
+/** How many sites one comparison chart will draw before it asks for a filter. */
+export const MAX_COMPARED_SITES = SITE_COLORS.length;
+
 /** Overall AQI is its own series, drawn alone, so it takes slot 1. */
 export const AQI_COLOR = '#2a78d6';
 
