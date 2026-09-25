@@ -479,11 +479,17 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
         await failRow(row.id, steps);
         continue;
       }
-      if (!row.relativePath.startsWith(`${row.siteName}/${parsed.dateFolder}/`)) {
+      // Compare against the folder poll1 actually builds. A site name is a
+      // human name — "Kharghar Sector 12" — and poll1 puts it on disk through
+      // safeFolder, so the spaces are underscores by the time it is a path.
+      // Comparing the raw name here failed every site whose name has a space
+      // in it, which is most of them.
+      const expectedFolder = `${safeFolder(row.siteName)}/${parsed.dateFolder}/`;
+      if (!row.relativePath.startsWith(expectedFolder)) {
         mark(
           INGESTION_STEPS[3],
           false,
-          `filed at ${row.relativePath}, but the name says ${row.siteName}/${parsed.dateFolder}/`,
+          `filed at ${row.relativePath}, but the name says ${expectedFolder}`,
         );
         await failRow(row.id, steps);
         continue;
@@ -607,6 +613,7 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
         architectId: handshake.architectId,
         companyRecordId: row.companyRecordId,
         rows: sheet.rows,
+        deliveredFrom: { latitude: row.latitude, longitude: row.longitude },
       });
 
       if (outcome.importedCount === 0) {

@@ -395,8 +395,15 @@ export async function importRows(params: {
   /** The registered company the readings came from, for attribution. */
   companyRecordId?: string | null;
   rows: Array<Record<string, unknown>>;
+  /**
+   * Where the file was sent from, taken from its name. Used only for rows
+   * that carry no position of their own, so every stored reading has a place
+   * on the monitoring map — a sheet that names its own coordinates keeps
+   * them, since that is the station speaking rather than the PC that sent it.
+   */
+  deliveredFrom?: { latitude: number | null; longitude: number | null };
 }): Promise<ImportOutcome> {
-  const { architectId, companyRecordId, rows } = params;
+  const { architectId, companyRecordId, rows, deliveredFrom } = params;
   const errors: Array<{ row: number; error: string }> = [];
   let importedCount = 0;
 
@@ -404,7 +411,12 @@ export async function importRows(params: {
     // +2: sheet rows are 1-based and row 1 is the header.
     const sheetRow = i + 2;
     try {
-      const input = reportSchema.parse(prepareRow(rows[i]));
+      const parsed = reportSchema.parse(prepareRow(rows[i]));
+      const input = {
+        ...parsed,
+        latitude: parsed.latitude ?? deliveredFrom?.latitude ?? null,
+        longitude: parsed.longitude ?? deliveredFrom?.longitude ?? null,
+      };
       await createReport({ userId: architectId, source: 'SFTP', input, companyRecordId });
       importedCount++;
     } catch (error) {

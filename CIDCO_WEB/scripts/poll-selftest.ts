@@ -16,7 +16,7 @@ import path from 'path';
 import { prisma } from '@/lib/prisma';
 
 import { archiveRoot, inboxRoot, parseAqiFileName, runPoll1, runPoll2 } from '@/lib/ingestionPoll';
-import { dataRoot, SHEET_COLUMNS } from '@/lib/sftp';
+import { dataRoot, safeFolder, SHEET_COLUMNS } from '@/lib/sftp';
 
 const quote = (v: string) => (v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v);
 const headerRow = () => SHEET_COLUMNS.map((c) => quote(c.header)).join(',');
@@ -108,6 +108,12 @@ async function main() {
   // 10 rows, 3 of them missing the required AQI Value.
   const partly = stamp(-360);
   await drop(`ABCD123_${partly}_AQI.csv`, partlyBlankCsv(10, [2, 5, 7]));
+  // A site name with spaces in it, which is what a real site name looks like.
+  // Poll1 puts it on disk with underscores; step 4 has to compare against that
+  // folder and not the raw name, or every human-named site fails validation.
+  const spaced = stamp(-480);
+  await drop(`Kharghar Sector 12_${spaced}_AQI.csv`, goodCsv());
+
   // Sent by an agent that was given the station's position at install time.
   const located = stamp(-420);
   await drop(`ABCD123_${located}_19.033000_73.029700_AQI.csv`, goodCsv());
@@ -116,16 +122,16 @@ async function main() {
 
   // --- poll1 -------------------------------------------------------------
   const poll1 = await runPoll1();
-  check('poll1 files every well-named CSV', poll1.moved === 7, `moved=${poll1.moved}`);
+  check('poll1 files every well-named CSV', poll1.moved === 8, `moved=${poll1.moved}`);
   check('poll1 refuses a name it cannot read', poll1.errors.some((e) => e.startsWith('reading.csv')));
   check('the refused file stays in the inbox', (await fs.readdir(inboxRoot())).includes('reading.csv'));
 
   const filed = await prisma.dataFile.findMany({ orderBy: { receivedAt: 'asc' } });
-  check('poll1 indexes every filed CSV', filed.length === 7, `rows=${filed.length}`);
+  check('poll1 indexes every filed CSV', filed.length === 8, `rows=${filed.length}`);
 
   for (const row of filed) {
     const parsed = parseAqiFileName(row.deliveredName!)!;
-    const expected = `${row.siteName}/${parsed.dateFolder}/${parsed.timeStem}.csv`;
+    const expected = `${safeFolder(row.siteName)}/${parsed.dateFolder}/${parsed.timeStem}.csv`;
     check(`  ${row.deliveredName} filed as siteName/dd_mm_yyyy/hh-mm-ss.csv`,
       row.relativePath === expected, row.relativePath);
     check(`  ${row.relativePath} is on disk`, await exists(path.join(dataRoot(), row.relativePath)));
@@ -134,6 +140,11 @@ async function main() {
 
   const auto = await prisma.company.findUnique({ where: { siteName: 'NEWCO777' } });
   check('poll1 registers a company it has never seen', Boolean(auto));
+
+  // --- a site name a person would actually write ------------------------
+  const spacedRow = filed.find((r) => r.siteName === 'Kharghar Sector 12')!;
+  check('a site name with spaces is filed under a safe folder',
+    spacedRow.relativePath.startsWith('Kharghar_Sector_12/'), spacedRow.relativePath);
 
   // --- the station's position --------------------------------------------
   const located_ = filed.find((r) => r.deliveredName?.includes('_19.033000_'))!;
@@ -161,7 +172,7 @@ async function main() {
 
   const archived = done.filter((f) => f.pollStatus === 'ARCHIVED');
   const failed = done.filter((f) => f.pollStatus === 'FAILED');
-  check('the good files are archived', archived.length === 4, `archived=${archived.length}`);
+  check('the good files are archived', archived.length === 5, `archived=${archived.length}`);
   check('the three broken files failed', failed.length === 3, `failed=${failed.length}`);
   check('an archived file reads CORRECT', archived.every((f) => f.fileStatus?.startsWith('CORRECT')));
 
@@ -225,6 +236,16 @@ async function main() {
     new Set(pair.map((r) => r.relativePath)).size === 2, pair.map((r) => r.relativePath).join(' , '));
   check('  the first file still exists',
     await exists(path.join(dataRoot(), firstOfPair!.relativePath)));
+
+  // The bug this guards: step 4 compared the raw site name against a path
+  // poll1 had already put underscores into, so every site whose name has a
+  // space failed validation and stored nothing.
+  const spacedDone = await prisma.dataFile.findFirst({ where: { siteName: 'Kharghar Sector 12' } });
+  check('  and it passes step 4 rather than failing on its own folder',
+    !spacedDone?.fileStatus?.includes('4. Validate filename — FAILED'),
+    spacedDone?.fileStatus?.split('\n').find((l) => l.startsWith('4.')));
+  check('  and its readings are stored', (spacedDone?.importedCount ?? 0) > 0,
+    `imported=${spacedDone?.importedCount}`);
 
   // --- the same delivery twice -------------------------------------------
   await drop(`ABCD123_${good}_AQI.csv`, goodCsv());

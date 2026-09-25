@@ -435,6 +435,14 @@ model Company {
   /// The architect responsible for the site.
   architectName     String?
 
+  /// Where CIDCO says this site is. The agent reports where each file was
+  /// actually sent from; the monitoring map compares the two.
+  registeredLatitude    Float?
+  registeredLongitude   Float?
+  /// How far a delivery may be from the registered point before the map
+  /// calls it a mismatch.
+  permittedRadiusMetres Int      @default(500)
+
   departmentId      String?
   nodeId            String?
 
