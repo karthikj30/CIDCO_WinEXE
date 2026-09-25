@@ -39,9 +39,38 @@ public sealed class PortalSender : ICidcoTransport
     public string CsvFolder { get; }
     public TimeSpan Timeout { get; }
 
-    /// <summary>Station coordinates set at install — embedded in the rename stamp.</summary>
+    /// <summary>
+    /// Where the PC is now, resolved fresh on every send.
+    ///
+    /// The position used to be fixed at install, which was wrong the moment an
+    /// architect drove to a second site: every file still claimed the first
+    /// one. CIDCO holds these coordinates to tell where data was sent from, so
+    /// the answer has to be taken at the moment of sending.
+    ///
+    /// Null, or a resolver that cannot answer, falls back to the registered
+    /// position below. Nothing here can stop a transfer.
+    /// </summary>
+    public LiveLocation? Location { get; init; }
+
+    /// <summary>
+    /// The position typed in while installing. Used only when nothing can say
+    /// where the PC is now, and kept so CIDCO can compare where a file says it
+    /// came from against where the site was registered.
+    /// </summary>
     public string Latitude { get; init; } = "";
     public string Longitude { get; init; } = "";
+
+    /// <summary>
+    /// The position to stamp on the file being sent right now: whatever the
+    /// PC can be told about itself, and the registered position only when
+    /// nothing else answers.
+    /// </summary>
+    internal (string Latitude, string Longitude) StampNow()
+    {
+        var fix = Location?.Current() ?? LocationFix.Unknown;
+        return fix.HasPosition ? (fix.Latitude, fix.Longitude) : (Latitude, Longitude);
+    }
+
 
     public PortalSender(
         Uri baseAddress,
@@ -111,7 +140,8 @@ public sealed class PortalSender : ICidcoTransport
 
         // Same rename rule as SFTP: siteName_timestamp[_lat_lon]_AQI.csv
         // regardless of the local export name.
-        var remoteName = RemotePath.AqiFileName(SiteName, DateTimeOffset.Now, Latitude, Longitude);
+        var (stampLat, stampLon) = StampNow();
+        var remoteName = RemotePath.AqiFileName(SiteName, DateTimeOffset.Now, stampLat, stampLon);
 
         byte[] bytes;
         try

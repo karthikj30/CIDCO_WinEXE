@@ -30,6 +30,13 @@ internal sealed class AgentWindow : Form
     private readonly TextBox _username = new();
     private readonly TextBox _password = new();
     private readonly TextBox _site = new();
+    /// <summary>
+    /// Where the PC is, asked afresh for each transfer. Windows Location
+    /// Service first, then a lookup from the public IP, and the position typed
+    /// in at install only if neither answers.
+    /// </summary>
+    private readonly LiveLocation _location;
+
     private readonly TextBox _latitude = new();
     private readonly TextBox _longitude = new();
     private readonly TextBox _folder = new();
@@ -48,12 +55,21 @@ internal sealed class AgentWindow : Form
     private readonly ListView _remote = new();
     private readonly RichTextBox _log = new();
     private readonly System.Windows.Forms.Timer _timer = new();
+    private readonly System.Windows.Forms.Timer _locationTimer = new();
+    private readonly Label _locationNote = new();
     private SplitContainer? _panes;
 
     public AgentWindow(Database db)
     {
         _db = db;
         _settings = Settings.Load(db);
+        var sources = new List<ILocationSource>();
+        // Windows Location Service only exists from Windows 10 1809. On
+        // anything older the network lookup is the best there is.
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) sources.Add(new WindowsLocationSource());
+        sources.Add(new NetworkLocationSource());
+        sources.Add(new RegisteredLocationSource(() => (_settings.Latitude, _settings.Longitude)));
+        _location = new LiveLocation(sources);
 
         Text = "CIDCO AQI Agent 1.0 — SFTP file transfer";
         ClientSize = new Size(1000, 660);
@@ -75,6 +91,45 @@ internal sealed class AgentWindow : Form
             await SendAsync(null, scheduled: true);
             ReArmTimer();
         };
+
+        // Off the UI thread: Windows Location can take a second or two to
+        // answer the first time, and a window that will not paint until it
+        // does looks broken.
+        _ = RefreshLocationAsync();
+        _locationTimer.Interval = 60_000;
+        _locationTimer.Tick += async (_, _) => await RefreshLocationAsync();
+        _locationTimer.Start();
+    }
+
+    /// <summary>
+    /// Reads where the PC is and shows it. Runs on a timer so an architect
+    /// who has moved sees it before they send, and again on every send.
+    /// </summary>
+    private async Task RefreshLocationAsync()
+    {
+        var fix = await Task.Run(() => _location.Current());
+        if (IsDisposed || !IsHandleCreated) return;
+        ShowLocation(fix);
+    }
+
+    private void ShowLocation(LocationFix fix)
+    {
+        if (fix.HasPosition)
+        {
+            _latitude.Text = fix.Latitude;
+            _longitude.Text = fix.Longitude;
+            _locationNote.Text = $"from {fix.Describe}";
+            _locationNote.ForeColor = fix.Origin == LocationOrigin.Registered ? Theme.Muted : Theme.Faint;
+            return;
+        }
+
+        // Nothing could say where this is. The file still goes; it just goes
+        // without a position, and saying so here is better than showing a
+        // stale number that is no longer true.
+        _latitude.Text = "unavailable";
+        _longitude.Text = "unavailable";
+        _locationNote.Text = "turn on location for desktop apps in Windows Settings";
+        _locationNote.ForeColor = Theme.Bad;
     }
 
     // -- layout ------------------------------------------------------------
@@ -116,10 +171,12 @@ internal sealed class AgentWindow : Form
         }
         _password.UseSystemPasswordChar = true;
 
-        // Coordinates are fixed at install — shown here, not editable.
+        // Read where this PC is now, and show it. Not editable: it is
+        // measured, not typed, and a transfer stamps whatever is current at
+        // the moment it goes.
         connect.Controls.Add(new Label
         {
-            Text = "Latitude (set at install)",
+            Text = "Latitude (live)",
             Font = Theme.Small,
             ForeColor = Theme.Muted,
             Location = new Point(14, 68),
@@ -134,7 +191,7 @@ internal sealed class AgentWindow : Form
 
         connect.Controls.Add(new Label
         {
-            Text = "Longitude (set at install)",
+            Text = "Longitude (live)",
             Font = Theme.Small,
             ForeColor = Theme.Muted,
             Location = new Point(186, 68),
@@ -146,6 +203,15 @@ internal sealed class AgentWindow : Form
         _longitude.ReadOnly = true;
         _longitude.BackColor = Theme.PanelBg;
         connect.Controls.Add(_longitude);
+
+        // Which of the three sources answered, so a rough network fix is not
+        // mistaken for a GPS one.
+        _locationNote.Text = "reading\u2026";
+        _locationNote.Font = Theme.Small;
+        _locationNote.ForeColor = Theme.Faint;
+        _locationNote.Location = new Point(358, 88);
+        _locationNote.Size = new Size(230, 14);
+        connect.Controls.Add(_locationNote);
 
         connect.Controls.Add(new Label
         {
@@ -299,8 +365,9 @@ internal sealed class AgentWindow : Form
         _ip.Text = _settings.IpOrDefault;
         _username.Text = _settings.UsernameOrDefault;
         _site.Text = _settings.SiteNameOrDefault;
-        _latitude.Text = string.IsNullOrWhiteSpace(_settings.Latitude) ? "(not set at install)" : _settings.Latitude;
-        _longitude.Text = string.IsNullOrWhiteSpace(_settings.Longitude) ? "(not set at install)" : _settings.Longitude;
+        // Filled by RefreshLocationAsync, which reads where the PC is now.
+        // The registered position is only a fallback inside that resolver.
+        ShowLocation(_location.Last);
         _folder.Text = _settings.CsvFolder;
         _keyPath.Text = _settings.PrivateKeyPath;
         _scheduleText.Text = $"Automatic sending is off · {Schedule.Describe(_settings.IntervalSeconds)}";
@@ -341,6 +408,7 @@ internal sealed class AgentWindow : Form
             PrivateKeyPath = _keyPath.Text.Trim(),
             Latitude = _settings.Latitude,
             Longitude = _settings.Longitude,
+            Location = _location,
         };
     }
 
@@ -462,7 +530,8 @@ internal sealed class AgentWindow : Form
                 timeout: null,
                 privateKeyPath: _keyPath.Text.Trim(),
                 latitude: _settings.Latitude,
-                longitude: _settings.Longitude));
+                longitude: _settings.Longitude,
+                location: _location));
         }
         catch (Exception error)
         {
@@ -712,6 +781,8 @@ internal sealed class AgentWindow : Form
     {
         _timer.Stop();
         _timer.Dispose();
+        _locationTimer.Stop();
+        _locationTimer.Dispose();
         base.OnFormClosed(e);
     }
 }

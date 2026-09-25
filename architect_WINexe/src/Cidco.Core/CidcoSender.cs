@@ -63,11 +63,37 @@ public sealed class CidcoSender : ICidcoTransport
     public TimeSpan Timeout { get; }
 
     /// <summary>
-    /// Station coordinates set at install. When both are present they are
-    /// appended to the existing AQI file stamp on every send.
+    /// Where the PC is now, resolved fresh on every send.
+    ///
+    /// The position used to be fixed at install, which was wrong the moment an
+    /// architect drove to a second site: every file still claimed the first
+    /// one. CIDCO holds these coordinates to tell where data was sent from, so
+    /// the answer has to be taken at the moment of sending.
+    ///
+    /// Null, or a resolver that cannot answer, falls back to the registered
+    /// position below. Nothing here can stop a transfer.
+    /// </summary>
+    public LiveLocation? Location { get; init; }
+
+    /// <summary>
+    /// The position typed in while installing. Used only when nothing can say
+    /// where the PC is now, and kept so CIDCO can compare where a file says it
+    /// came from against where the site was registered.
     /// </summary>
     public string Latitude { get; init; } = "";
     public string Longitude { get; init; } = "";
+
+    /// <summary>
+    /// The position to stamp on the file being sent right now: whatever the
+    /// PC can be told about itself, and the registered position only when
+    /// nothing else answers.
+    /// </summary>
+    internal (string Latitude, string Longitude) StampNow()
+    {
+        var fix = Location?.Current() ?? LocationFix.Unknown;
+        return fix.HasPosition ? (fix.Latitude, fix.Longitude) : (Latitude, Longitude);
+    }
+
 
     /// <summary>
     /// A folder to upload into on an ordinary SFTP server.
@@ -140,6 +166,7 @@ public sealed class CidcoSender : ICidcoTransport
             PrivateKeyPath = PrivateKeyPath,
             Latitude = Latitude,
             Longitude = Longitude,
+            Location = Location,
         };
 
     /// <summary>
@@ -161,7 +188,8 @@ public sealed class CidcoSender : ICidcoTransport
         TimeSpan? timeout = null,
         string privateKeyPath = "",
         string latitude = "",
-        string longitude = "")
+        string longitude = "",
+        LiveLocation? location = null)
     {
         var ports = address.PortsToTry();
         CidcoSender? attempted = null;
@@ -174,6 +202,7 @@ public sealed class CidcoSender : ICidcoTransport
                 PrivateKeyPath = privateKeyPath,
                 Latitude = latitude,
                 Longitude = longitude,
+                Location = location,
             };
             var result = sender.CheckConnection();
             attempted = sender;
@@ -399,9 +428,10 @@ public sealed class CidcoSender : ICidcoTransport
         // renamed file into a path that already exists (or into CIDCO's intake
         // when no plain folder was named).
         var sentAt = DateTimeOffset.Now;
-        var remoteName = RemotePath.AqiFileName(SiteName, sentAt, Latitude, Longitude);
+        var (stampLat, stampLon) = StampNow();
+        var remoteName = RemotePath.AqiFileName(SiteName, sentAt, stampLat, stampLon);
         var target = IsPlainSftp
-            ? RemotePath.IntoFolder(RemoteDirectory, SiteName, sentAt, Latitude, Longitude)
+            ? RemotePath.IntoFolder(RemoteDirectory, SiteName, sentAt, stampLat, stampLon)
             : RemotePath.For(SiteName, remoteName);
         var parent = RemotePath.ParentOf(target);
 
