@@ -9,6 +9,7 @@ import {
   monthFolderFor,
   parseDataFile,
   safeFolder,
+  storageDir,
   sharedLoginHandshake,
   timestampFolderFor,
   validateColumns,
@@ -125,11 +126,11 @@ function coordinatesOf(lat?: string, lon?: string) {
 const pathExists = (p: string) => fs.stat(p).then(() => true, () => false);
 
 export function inboxRoot() {
-  return path.resolve(process.env.CIDCO_INBOX_DIR || './storage/inbox');
+  return storageDir(process.env.CIDCO_INBOX_DIR, './storage/inbox');
 }
 
 export function archiveRoot() {
-  return path.resolve(process.env.CIDCO_ARCHIVE_DIR || './storage/archive');
+  return storageDir(process.env.CIDCO_ARCHIVE_DIR, './storage/archive');
 }
 
 /** The folder columns on the data row, derived from a parsed name. */

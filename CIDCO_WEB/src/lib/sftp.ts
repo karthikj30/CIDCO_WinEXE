@@ -133,9 +133,35 @@ export function hashesEqual(a: string, b: string) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
+/**
+ * Where a relative storage path in .env is measured from.
+ *
+ * `path.resolve` measures from the process's working directory, and the poll
+ * worker and the portal do not share one: `npm run poll` runs from the project
+ * folder, while Next's standalone server runs from
+ * `<project>/.next/standalone`. A relative CIDCO_DATA_DIR therefore pointed at
+ * two different folders — the worker filed a delivery into one and wrote its
+ * heartbeat there, and the portal read the other, found nothing, and reported
+ * the worker stopped while it was ticking away.
+ *
+ * Both now measure from the project folder, so a relative path in .env means
+ * the same place whichever process reads it.
+ */
+function projectBase() {
+  const cwd = process.cwd();
+  const standalone = `${path.sep}.next${path.sep}standalone`;
+  return cwd.endsWith(standalone) ? cwd.slice(0, -standalone.length) : cwd;
+}
+
+/** An absolute storage folder, from an env value that may be relative. */
+export function storageDir(value: string | undefined, fallback: string) {
+  const raw = (value ?? '').trim() || fallback;
+  return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(projectBase(), raw);
+}
+
 /** Where a given architect's uploads land on CIDCO's disk. */
 export function storageRoot() {
-  return path.resolve(process.env.SFTP_STORAGE_DIR || './storage/sftp');
+  return storageDir(process.env.SFTP_STORAGE_DIR, './storage/sftp');
 }
 
 export function homeDirFor(clientId: string) {
@@ -683,7 +709,7 @@ export async function ingestTransfer(params: {
  * `companies` is the master table; `data_files` indexes this tree.
  */
 export function dataRoot() {
-  return path.resolve(process.env.CIDCO_DATA_DIR || './storage/cidco-data');
+  return storageDir(process.env.CIDCO_DATA_DIR, './storage/cidco-data');
 }
 
 const MONTHS = [

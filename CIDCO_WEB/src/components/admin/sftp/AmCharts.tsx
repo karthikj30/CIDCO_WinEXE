@@ -80,6 +80,24 @@ function styleAxis(axis: am5xy.Axis<am5xy.AxisRenderer>) {
   renderer.grid.template.setAll({ stroke: GRID, strokeDasharray: [3, 4], strokeOpacity: 1 });
 }
 
+/**
+ * Site names are long and there are a lot of them, so horizontal labels run
+ * into each other — "Dronagiri Node 4" and "Kharghar Sector 12" were printing
+ * on top of one another. Angled and truncated, with the full name in the
+ * tooltip, every bar keeps a readable label.
+ */
+function styleCategoryLabels(axis: am5xy.CategoryAxis<am5xy.AxisRenderer>) {
+  axis.get('renderer').labels.template.setAll({
+    rotation: -35,
+    centerY: am5.p50,
+    centerX: am5.p100,
+    maxWidth: 110,
+    oversizedBehavior: 'truncate',
+    fontSize: 11,
+    fill: MUTED,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Lines over time
 // ---------------------------------------------------------------------------
@@ -199,7 +217,7 @@ export function TrendChart({
 export type Column = { label: string; value: number; color: string; note?: string };
 
 /** Magnitude across a handful of named things, anchored to zero. */
-export function ColumnChart({ columns, height = 280 }: { columns: Column[]; height?: number }) {
+export function ColumnChart({ columns, height = 320 }: { columns: Column[]; height?: number }) {
   const holder = useChart((root) => {
     const chart = root.container.children.push(
       am5xy.XYChart.new(root, { panX: false, panY: false, wheelY: 'none' }),
@@ -216,6 +234,7 @@ export function ColumnChart({ columns, height = 280 }: { columns: Column[]; heig
     );
     styleAxis(xAxis);
     styleAxis(yAxis);
+    styleCategoryLabels(xAxis);
     xAxis.get('renderer').grid.template.set('visible', false);
 
     const series = chart.series.push(
@@ -277,7 +296,7 @@ export function ColumnChart({ columns, height = 280 }: { columns: Column[]; heig
  * than six colours, and the legend names every one.
  */
 export function StackedBandChart({
-  rows, height = 300,
+  rows, height = 340,
 }: {
   rows: Array<{ siteName: string; counts: Record<AqiBandKey, number>; total: number }>;
   height?: number;
@@ -298,6 +317,7 @@ export function StackedBandChart({
     );
     styleAxis(xAxis);
     styleAxis(yAxis);
+    styleCategoryLabels(xAxis);
     xAxis.get('renderer').grid.template.set('visible', false);
 
     const data = rows.map((r) => ({ siteName: r.siteName, ...r.counts }));

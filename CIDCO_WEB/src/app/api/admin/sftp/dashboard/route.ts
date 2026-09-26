@@ -167,6 +167,12 @@ export async function GET(req: NextRequest) {
     });
 
     if (status) sites = sites.filter((s) => s.reporting === status);
+
+    // A filter on the readings has to narrow the sites too. Asking for the
+    // Poor readings, or one station's, and still being told "8 sites" counts
+    // sites that have nothing to do with the answer — and leaves them on the
+    // map and in the table with an empty AQI.
+    if (band || station) sites = sites.filter((s) => s.readingCount > 0);
     const shownIds = new Set(sites.map((s) => s.id));
     const scoped = inBand.filter((r) => r.companyRecordId && shownIds.has(r.companyRecordId));
 
