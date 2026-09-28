@@ -1,29 +1,27 @@
 import type { Metadata } from 'next';
-import PortalWorkspace from '@/components/PortalWorkspace';
+import CidcoWorkspace from '@/components/CidcoWorkspace';
 import ChannelHeader from '@/components/ChannelHeader';
 
 export const metadata: Metadata = {
-  title: 'CIDCO API Portal — AQI Compliance',
-  description: 'Approve architect integrations, issue tokens and watch the API data feed.',
+  title: 'CIDCO Portal — AQI Compliance',
+  description:
+    'One desk for both channels: the SFTP deliveries architects send from the Windows agent, and the API integrations their stations post through.',
 };
 
 // Logs and readings change constantly, so never cache this page.
 export const dynamic = 'force-dynamic';
 
-export default function CidcoApiPortalPage() {
+export default function CidcoPortalPage() {
   return (
     <div className="flex min-h-screen flex-col overflow-hidden bg-slate-50 font-sans text-slate-900">
       <ChannelHeader
         badge="C"
         title="CIDCO"
-        subtitle="API Portal"
+        subtitle="AQI Compliance Portal"
         accent="cidco"
-        links={[
-          { href: '/cidco/sftp', label: 'SFTP portal' },
-          { href: '/', label: 'Switch channel' },
-        ]}
+        links={[{ href: '/', label: 'Switch channel' }]}
       />
-      <PortalWorkspace />
+      <CidcoWorkspace landing="overview" />
     </div>
   );
 }

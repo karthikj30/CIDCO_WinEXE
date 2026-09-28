@@ -52,6 +52,31 @@ const CHANNELS = [
   },
 ] as const;
 
+/**
+ * What a CIDCO officer sees instead of the two channel cards.
+ *
+ * Both channels now live in one workspace, so offering a choice between them
+ * would be offering a choice that no longer exists.
+ */
+const OFFICER_DESK = {
+  key: 'CIDCO',
+  name: 'AQI compliance dashboard',
+  blurb:
+    'Every site CIDCO monitors, on the map and in the charts \u2014 the CSVs architects deliver over SFTP and the readings their stations post through the API, together.',
+  detail: 'Monitoring \u00b7 deliveries \u00b7 site master \u00b7 handshakes \u00b7 tokens \u00b7 logs',
+  officerHref: '/cidco',
+  architectHref: '/cidco',
+  accent: 'cidco',
+  icon: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="9" />
+      <rect x="14" y="3" width="7" height="5" />
+      <rect x="14" y="12" width="7" height="9" />
+      <rect x="3" y="16" width="7" height="5" />
+    </svg>
+  ),
+} as const;
+
 export default function Gateway() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
@@ -153,8 +178,9 @@ export default function Gateway() {
             </p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Welcome, {user.name}</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Choose how {isOfficer ? 'you want to work with architect data' : 'you want to send your AQI data'}. Each
-              channel has its own dashboard.
+              {isOfficer
+                ? 'Both channels are on one desk — the SFTP deliveries and the API integrations, in one dashboard.'
+                : 'Choose how you want to send your AQI data. You only need one of these.'}
             </p>
           </div>
           <button onClick={signOut} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
@@ -162,8 +188,13 @@ export default function Gateway() {
           </button>
         </div>
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2">
-          {CHANNELS.map((c) => {
+        {/*
+          An officer gets one door: their job does not divide by transport, so
+          the two channels share a dashboard. An architect still gets two,
+          because they use one or the other and the choice is real.
+        */}
+        <div className={`mt-8 grid gap-5 ${isOfficer ? '' : 'sm:grid-cols-2'}`}>
+          {(isOfficer ? [OFFICER_DESK] : CHANNELS).map((c) => {
             const href = isOfficer ? c.officerHref : c.architectHref;
             const violet = c.accent === 'violet';
             return (
@@ -189,7 +220,7 @@ export default function Gateway() {
                     violet ? 'text-violet-700' : 'text-cidco-700'
                   }`}
                 >
-                  Open {c.key} dashboard
+                  {isOfficer ? 'Open the dashboard' : `Open ${c.key} dashboard`}
                   <span className="transition-transform group-hover:translate-x-0.5">→</span>
                 </span>
               </a>
