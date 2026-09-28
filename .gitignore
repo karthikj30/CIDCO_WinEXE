@@ -26,9 +26,9 @@ arch_web/node_modules/
 arch_web/.next/
 arch_web/out/
 arch_web/build/
-# Its .env holds the same database password as CIDCO_WEB's; .env.example is
-# the one that ships.
-arch_web/.env
+# Keep arch_web/.env in git, same as CIDCO_WEB's — a clone gets DATABASE_URL
+# and the signing key without being configured by hand.
+# Still ignore machine-specific overrides:
 arch_web/.env.local
 arch_web/*.tsbuildinfo
 arch_web/next-env.d.ts
