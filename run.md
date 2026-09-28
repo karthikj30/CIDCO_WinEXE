@@ -204,27 +204,261 @@ Shared SFTP defaults (override in `.env`): user `cidco@example.com` / password `
 
 ## C. On the server, over PuTTY
 
-Deploying the latest build on the Ubuntu box. Everything below is one session.
-
-### 1. Pull and build
+### The short version — pull, rebuild, restart
 
 ```bash
-cd ~/CIDCO_WinEXE          # wherever you cloned it
-git pull
-
-cd CIDCO_WEB
-npm ci                     # not npm install — matches package-lock exactly
-npx prisma migrate deploy  # creates or updates every table
-npx prisma generate        # the client the app imports
-npm run build
+cd ~/CIDCO_WinEXE/CIDCO_WEB
+./deploy.sh
 ```
 
-`npm ci` fails if `package-lock.json` is missing; use `npm install` then.
+That is the whole deploy: pull, `npm ci`, `prisma migrate deploy`, `npm run
+build`, then **reload** the pm2 processes. Safe to run as often as you like —
+it reloads what is already running instead of starting more, so `pm2 ls` shows
+the same three processes however many times it has run.
 
-If `migrate deploy` answers **"The database schema is not empty"**, the tables
-were created from `prisma/full_schema.sql` rather than by Prisma, so there is
-no migration history for it to build on. Tell it the existing migrations are
-already applied — once, then it works normally from then on:
+Changed only an `.env` value, like the poll interval or the port?
+
+```bash
+./deploy.sh --no-build
+```
+
+### First time on a box, or after a reboot
+
+```bash
+sudo npm install -g pm2
+cd ~/CIDCO_WinEXE/CIDCO_WEB
+
+npm ci
+npx prisma migrate deploy
+npm run build
+
+pm2 startOrReload ecosystem.config.js
+pm2 save
+pm2 startup                    # run the sudo line it prints, once
+```
+
+Three processes come up: **cidco-web** (the portal), **cidco-poll** (ingestion)
+and **cidco-sftp** (the SFTP intake).
+
+### Never use `npm start` or `npm restart` here
+
+They start a *second* copy beside the one pm2 is already running, and you get:
+
+```
+Error: listen EADDRINUSE: address already in use :::3000
+```
+
+Use pm2:
+
+```bash
+pm2 reload cidco-web           # just the portal
+pm2 reload all                 # everything
+pm2 ls                         # what is actually running
+pm2 logs cidco-poll            # follow ingestion
+```
+
+If duplicates have already built up, clear them once:
+
+```bash
+pm2 delete all
+pm2 startOrReload ecosystem.config.js
+pm2 save
+```
+
+### Which port
+
+Nothing in the code hardcodes one. Set it in `CIDCO_WEB/.env`:
+
+```
+PORT=8040
+```
+
+`ecosystem.config.js` reads it from there, and a shell variable of the same
+name wins over it. Change it in one place and pm2, the build and the health
+check all follow.
+
+### Checking both channels
+
+Both live on **one dashboard** now — sign in once at `/cidco` and the sidebar
+has them grouped:
+
+```
+Monitoring dashboard
+SFTP channel    Delivered transfers · Data · Companies (master) · SFTP accounts
+API channel     AQI data · Architect handshakes · Validation requests ·
+                Token requests · Communication logs
+```
+
+`/cidco/sftp` still works and opens on the SFTP group, so old links are fine.
+
+From the shell:
+
+```bash
+# is the portal up and can it see the database?
+curl -s localhost:8040/api/health
+# {"success":true,"data":{"status":"ok","database":"connected", … }}
+
+# is ingestion running? a line every POLL_INTERVAL_MS
+pm2 logs cidco-poll --lines 5 --nostream
+
+# is the SFTP intake listening?
+pm2 logs cidco-sftp --lines 5 --nostream
+ss -ltnp | grep 2222
+
+# every page answering
+for r in / /cidco /cidco/sftp /architect /architect/sftp; do
+  printf '%-18s %s\n' "$r" "$(curl -s -o /dev/null -w '%{http_code}' localhost:8040$r)"
+done
+```
+
+In the browser, signed in as an officer:
+
+| Check | Where | What good looks like |
+| --- | --- | --- |
+| **SFTP channel** | Data | *Poll worker last ran Ns ago*, and the delivery under the site → the date, with its ten-step status |
+| | Monitoring dashboard | sites on the map, AQI in the charts |
+| | Companies (master) | the site, its keys, node and department |
+| **API channel** | AQI data | readings posted through the API |
+| | Architect handshakes | the credentials issued, and their status |
+| | Token requests | anything waiting for approval |
+
+An architect still gets two doors on the front page — **API integration** and
+**SFTP file transfer** — because they use one or the other.
+
+### Scheduling the two polls
+
+One process runs both every 15 seconds by default. To give them separate
+schedules — poll1 only reads file names and is cheap, poll2 parses whole
+spreadsheets:
+
+```bash
+POLL1_INTERVAL_MS=5000   npm run poll -- --only=1
+POLL2_INTERVAL_MS=60000  npm run poll -- --only=2
+```
+
+As pm2 processes: comment out `cidco-poll` in `ecosystem.config.js`, uncomment
+`cidco-poll1` and `cidco-poll2` below it, then `./deploy.sh --no-build`.
+
+### Looking at PostgreSQL
+
+**On the server**, straight in:
+
+```bash
+psql -h localhost -U cidco_sftp -d cidco_sftp
+```
+
+`DATABASE_URL` in `.env` has the user, database and password. Its
+`?schema=public` is a **Prisma-only** parameter — psql rejects it, so use the
+plain form above.
+
+**On a different port.** Postgres is on 5432 by default; a second instance or
+the docker-compose one is usually 5433:
+
+```bash
+psql -h localhost -p 5433 -U cidco_user -d cidco_aqi
+
+# which port is this server on?
+psql -h localhost -U cidco_sftp -d cidco_sftp -c "show port"
+
+# what is listening
+ss -ltnp | grep -E '543[0-9]'
+```
+
+Match `.env` to it:
+
+```
+DATABASE_URL="postgresql://cidco_user:cidco_password@localhost:5433/cidco_aqi?schema=public"
+```
+
+**From your own laptop — use an SSH tunnel, do not open the port.** Forward the
+server's 5432 to any free local port, say 6543:
+
+```bash
+ssh -i <your-key.pem> -L 6543:localhost:5432 ubuntu@<server-ip>
+```
+
+Leave that open, and point psql, pgAdmin or DBeaver on your machine at
+`localhost:6543`:
+
+```bash
+psql -h localhost -p 6543 -U cidco_sftp -d cidco_sftp
+```
+
+**Prisma Studio, the click-to-edit view.** On the server:
+
+```bash
+cd ~/CIDCO_WinEXE/CIDCO_WEB
+npx prisma studio                  # port 5555
+npx prisma studio --port 5600      # or any free port
+```
+
+The `http://localhost:5555` it prints is **the server's** localhost. Studio
+listens on every interface, so what stops your browser reaching it is the EC2
+security group — which should stay closed. Tunnel it instead, from your laptop:
+
+```bash
+ssh -i <your-key.pem> -L 5555:localhost:5555 ubuntu@<server-ip>
+```
+
+then open `http://localhost:5555` in your own browser.
+
+> **Do not open 5555 or 5432 in the security group.** Prisma Studio has no login
+> of any kind — anyone who finds the port gets full read and write on every
+> table, including dropping it.
+
+**Some queries worth having:**
+
+```bash
+psql -h localhost -U cidco_sftp -d cidco_sftp <<'SQL'
+\dt                                                    -- the tables
+SELECT "siteName", "architectName", active FROM companies ORDER BY 1;
+SELECT "pollStatus", COUNT(*) FROM data_files GROUP BY 1;   -- anything stuck?
+SELECT c."siteName", COUNT(r.id) AS readings
+FROM companies c LEFT JOIN reports r ON r."companyRecordId" = c.id
+GROUP BY 1 ORDER BY 2 DESC;
+SQL
+```
+
+### Tell the polls where the agent drops files
+
+The step that decides whether anything appears at all. The Windows agent
+uploads into a folder; **poll1 only looks at `CIDCO_INBOX_DIR`**, so if that is
+not the same folder the files sit there and the portal stays empty.
+
+In `CIDCO_WEB/.env`:
+
+```
+CIDCO_INBOX_DIR="/home/ubuntu/cidco/sftp1"
+```
+
+It must be the folder in the agent's address bar, and the user running the poll
+worker must be able to read **and delete** from it — poll1 moves files out.
+
+A **relative** path such as `./storage/cidco-data` is measured from the
+`CIDCO_WEB` folder by both the portal and the poll worker, so they agree.
+
+### Make yourself a CIDCO officer
+
+**From the portal** — open `/cidco`, choose **Create an account**, pick *CIDCO
+officer*. The first officer on an empty database needs no code; every one after
+needs `CIDCO_OFFICER_SIGNUP_CODE` from `CIDCO_WEB/.env`.
+
+Or from the shell, which also promotes an account created by mistake:
+
+```bash
+npm run officer:create -- you@cidco.gov.in "Your Name" YourPassword123
+npm run officer:create -- you@cidco.gov.in        # promote, keep the password
+```
+
+After promoting, **sign out in the browser first** — the cookie carries the old
+role until it is replaced.
+
+### If migrate deploy refuses
+
+If it answers **"The database schema is not empty"**, the tables were created
+from `prisma/full_schema.sql` rather than by Prisma, so there is no migration
+history to build on. Tell it the existing migrations are already applied —
+once, then it works normally:
 
 ```bash
 for m in $(ls prisma/migrations | grep -v migration_lock); do
@@ -233,125 +467,31 @@ done
 npx prisma migrate deploy      # "No pending migrations to apply."
 ```
 
-### 2. Tell the polls where the agent drops files
-
-This is the step that decides whether anything appears on the portal. The
-Windows agent uploads over plain SFTP into a folder; **poll1 only looks at
-`CIDCO_INBOX_DIR`**, so if that is not the same folder, the files sit there and
-the portal stays empty. Files arriving are not ingestion — something has to go
-and read them.
-
-In `CIDCO_WEB/.env`:
-
-```
-CIDCO_INBOX_DIR="/home/ubuntu/cidco/sftp1"
-```
-
-The folder must be the one in the agent's address bar, and the user running the
-poll worker must be able to read **and delete** from it — poll1 moves files out.
-
-### 3. Make yourself a CIDCO officer
-
-**From the portal** — open `/cidco` or `/cidco/sftp`, choose **Sign up**, and
-create the account. The first officer needs no code; every one after needs
-`CIDCO_OFFICER_SIGNUP_CODE` from `CIDCO_WEB/.env`. Officers see every
-company's data.
-
-Or from the shell, which also promotes an account created by mistake:
-
-Signing up on the portal creates an **architect**, which is why *Data* answers
-*CIDCO officer sign-in required*. Officers are created here, because an officer
-reads every company's data:
-
-```bash
-npm run officer:create -- you@cidco.gov.in "Your Name" YourPassword123
-```
-
-Run it on an email that already exists and it promotes that account instead,
-keeping the password:
-
-```bash
-npm run officer:create -- you@cidco.gov.in
-```
-
-Then **sign out in the browser first** — the cookie carries the old role until
-it is replaced — and sign in again at `/cidco`.
-
-### 4. Run it
-
-Two processes. The portal alone will never show data; the poll worker is what
-puts it there.
-
-```bash
-# terminal 1 — the portal
-npm start                          # port 3000
-
-# terminal 2 — the ingestion worker
-npm run poll
-```
-
-**Both, every time.** The portal only reads what the worker has already
-ingested; on its own it will keep showing the last batch for ever while new
-files pile up in the dropbox. Closing the terminal the worker is in stops it —
-which is what step 5 is for. When it is not running, **Data** shows an amber
-banner saying so and how many files are waiting.
-
-On a different port, use the standalone server:
-
-```bash
-PORT=8040 node .next/standalone/server.js
-```
-
-### 5. Keeping them up after you close PuTTY
-
-Closing the session kills both. `pm2` survives logout and reboots:
-
-```bash
-sudo npm install -g pm2
-cd ~/CIDCO_WinEXE/CIDCO_WEB
-
-pm2 start npm --name cidco-web  -- start
-pm2 start npm --name cidco-poll -- run poll
-pm2 save
-pm2 startup                      # run the sudo line it prints
-
-pm2 logs cidco-poll              # watch ingestion
-pm2 restart cidco-web cidco-poll # after a git pull + rebuild
-```
-
-Without pm2, `nohup npm start > web.log 2>&1 &` works but does not come back
-after a reboot.
-
-### 6. Checking it worked
-
-```bash
-ls ~/cidco/sftp1                 # should empty as poll1 files things away
-pm2 logs cidco-poll --lines 20   # "poll1 moved=1 … poll2 processed=1"
-```
-
-Then open the portal, sign in at `/cidco` as the officer, and the delivery is
-under **Data → the company → the date**, with its ten-step status. **Readings
-table** shows the rows and which parameters are missing.
-
 ### If the portal is still empty
 
 | What you see | What it means |
 | --- | --- |
-| *CIDCO officer sign-in required*, with the officer's name already in the sidebar | the browser is not keeping the session cookie. Serving over `http://` on a bare IP while the cookie is marked `Secure` does this, silently. Set `COOKIE_SECURE=false` in `.env` and restart, or serve over https |
-| *CIDCO officer sign-in required* on a fresh sign-in | the account is an architect — step 3 |
-| *Delivered transfers* stays empty | that page only shows CIDCO's own SFTP intake. Files dropped in a plain SFTP folder and picked up by the poll worker are under **Data** |
-| Files pile up in the dropbox | the poll worker is not running, or `CIDCO_INBOX_DIR` points elsewhere. **Data** says so in an amber banner when it notices |
-| A new company's files never appear | almost always the poll worker again — a company does not need registering first, poll1 creates it from the file name |
-| `poll1 … errors=… filename must be` | the file was not put there by the agent, so its name is not `companyId_dd_mm_yyyy_hh-mm-ss_AQI.csv` |
-| Page loads unstyled | `.next/static` missing — rerun `npm run build` |
+| *CIDCO officer sign-in required*, with the officer's name already in the sidebar | the browser is not keeping the session cookie. Serving over `http://` on a bare IP while the cookie is marked `Secure` does this, silently. Set `COOKIE_SECURE=false` in `.env` and reload |
+| *CIDCO officer sign-in required* on a fresh sign-in | the account is an architect — promote it above |
+| Data says *Poll worker is not running* | start it: `pm2 startOrReload ecosystem.config.js` |
+| Data says *N files cannot be filed* | the names are not in the agent's format. It lists them; rename or remove them from the inbox |
+| Files pile up in the dropbox | `CIDCO_INBOX_DIR` points somewhere else |
+| A new site's files never appear | the poll worker again — a site does not need registering first, poll1 creates it from the file name |
+| `poll1 … errors=… filename must be` | the file was not put there by the agent. The name has to be `siteName_dd_mm_yyyy_hh-mm-ss[_lat_lon]_AQI.csv` |
+| Page loads unstyled, or `ChunkLoadError` | the old process is still serving a deleted build. `pm2 reload cidco-web` |
 | *Environment variable not found: DATABASE_URL* | `.env` was not read; in Docker pass it into the container |
 
 ## Quick end-to-end check
 
-1. Start Postgres + `npm run dev` + `npm run sftp` + `npm run poll` on CIDCO.
-2. Register a company in `/cidco/sftp` (company id, IP, optional path).
-3. On the architect PC, run `CIDCO_AQI_Agent.exe`, connect with that company id, send a `.csv`.
-4. Confirm the file appears under Data / uploads, then poll2 stores readings and sets `fileStatus`.
+1. Start Postgres, then `pm2 startOrReload ecosystem.config.js` (or `npm run dev`
+   + `npm run sftp` + `npm run poll` locally).
+2. Register the site in **Companies (master)** — site name, designated path, and
+   the registered position the map checks deliveries against.
+3. On the architect PC run `CIDCO_AQI_Agent.exe`, connect with that site name,
+   and send a `.csv`.
+4. **Data** shows the file under the site → the date with all ten steps OK, the
+   **Monitoring dashboard** puts it on the map, and **Delivered transfers**
+   counts it.
 
 ---
 
