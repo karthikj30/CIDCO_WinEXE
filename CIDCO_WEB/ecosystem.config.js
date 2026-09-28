@@ -15,10 +15,38 @@
  * Both polls run in one process by default. To give them separate schedules,
  * comment out `cidco-poll` and uncomment the two below it.
  */
+const fs = require('fs');
 const path = require('path');
 
 /** Everything runs from this folder, so a relative path in .env means one place. */
 const cwd = __dirname;
+
+/**
+ * Reads .env so the port lives in one place.
+ *
+ * Nothing here hardcodes a port or an address: the server this runs on is
+ * rebuilt and re-addressed, and a number written into a committed file is a
+ * number somebody has to remember to change. Set PORT in .env — or in the
+ * shell, which wins — and everything follows it.
+ */
+function fromEnvFile(name, fallback) {
+  if (process.env[name]) return process.env[name];
+  try {
+    const line = fs
+      .readFileSync(path.join(cwd, '.env'), 'utf8')
+      .split('\n')
+      .find((l) => l.trim().startsWith(`${name}=`));
+    if (line) return line.slice(line.indexOf('=') + 1).trim().replace(/^["']|["']$/g, '');
+  } catch {
+    // No .env yet. The fallback is the answer.
+  }
+  return fallback;
+}
+
+const PORT = fromEnvFile('PORT', '3000');
+// 0.0.0.0 so the port is reachable from outside the box; which addresses may
+// actually reach it is the firewall's business, not this file's.
+const HOSTNAME = fromEnvFile('HOSTNAME', '0.0.0.0');
 
 module.exports = {
   apps: [
@@ -26,7 +54,7 @@ module.exports = {
       name: 'cidco-web',
       cwd,
       script: path.join(cwd, '.next/standalone/server.js'),
-      env: { NODE_ENV: 'production', PORT: 8040, HOSTNAME: '0.0.0.0' },
+      env: { NODE_ENV: 'production', PORT, HOSTNAME },
       // One process. Next's standalone server keeps no state worth sharing,
       // but two copies would both answer and only one would be the one you
       // just restarted.
@@ -43,7 +71,7 @@ module.exports = {
       cwd,
       script: 'npm',
       args: 'run poll',
-      env: { NODE_ENV: 'production', POLL_INTERVAL_MS: 15000 },
+      env: { NODE_ENV: 'production', POLL_INTERVAL_MS: fromEnvFile('POLL_INTERVAL_MS', '15000') },
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -56,7 +84,7 @@ module.exports = {
     //   cwd,
     //   script: 'npm',
     //   args: 'run poll -- --only=1',
-    //   env: { NODE_ENV: 'production', POLL1_INTERVAL_MS: 5000 },
+    //   env: { NODE_ENV: 'production', POLL1_INTERVAL_MS: fromEnvFile('POLL1_INTERVAL_MS', '5000') },
     //   instances: 1,
     //   exec_mode: 'fork',
     //   autorestart: true,
@@ -67,7 +95,7 @@ module.exports = {
     //   cwd,
     //   script: 'npm',
     //   args: 'run poll -- --only=2',
-    //   env: { NODE_ENV: 'production', POLL2_INTERVAL_MS: 60000 },
+    //   env: { NODE_ENV: 'production', POLL2_INTERVAL_MS: fromEnvFile('POLL2_INTERVAL_MS', '60000') },
     //   instances: 1,
     //   exec_mode: 'fork',
     //   autorestart: true,

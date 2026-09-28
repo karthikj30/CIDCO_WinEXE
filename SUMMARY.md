@@ -347,11 +347,35 @@ DELETE FROM companies WHERE "siteName" = 'Test Site';
 DELETE FROM data_files WHERE "deliveredName" = 'ABCD123_21_09_2026_11-30-24_AQI.csv';
 ```
 
-### A browser instead of SQL
+### A browser instead of SQL — and why you cannot see it
 
 ```bash
-cd CIDCO_WEB && npx prisma studio      # opens on :5555, click to edit
+cd CIDCO_WEB && npx prisma studio
+# Prisma Studio is up on http://localhost:5555
 ```
+
+That `localhost` is **the server's** localhost, not yours — the message is printed for whoever
+is sitting at the machine. Studio itself listens on all interfaces (`0.0.0.0:5555`), so what is
+actually stopping you is the **EC2 security group**: inbound 5555 is closed, as it should be.
+
+**Open an SSH tunnel instead.** On *your* machine, not the server:
+
+```bash
+ssh -i <your-key.pem> -L 5555:localhost:5555 ubuntu@<server-ip>
+```
+
+Leave that terminal open, start Studio on the server in another, and open
+`http://localhost:5555` in your own browser. The traffic goes down the SSH connection you are
+already trusted on; nothing new is exposed to the internet.
+
+The same tunnel works for psql from a desktop client — forward `5432` and point pgAdmin or
+DBeaver at `localhost:5432`.
+
+**Do not open 5555 in the security group.** It is tempting — Studio is already listening on
+every interface, so one firewall rule would make it work. But Studio has **no login of any
+kind**. Anyone who finds the port gets full read and write on every table, including dropping
+it: the master, every reading, every officer account. It is a development tool that assumes it
+is on your own machine. The same goes for 5432 — tunnel it rather than opening it.
 
 ### Backups
 
@@ -463,6 +487,26 @@ do want cron, drive the API instead of spawning a worker:
 
 An interval longer than the agent's send interval is fine — deliveries queue in the inbox and
 are filed in order.
+
+### Ports and addresses
+
+Nothing in the code hardcodes a port or an IP. The portal's port comes from `PORT` in `.env`
+(a shell variable of the same name wins), `ecosystem.config.js` reads it from there, and
+`deploy.sh` reports whatever it found. Change the port in one place and everything follows.
+
+The address CIDCO tells architects to send to is taken from whatever host the browser asked
+for, so it follows a changing public IP on its own. `SFTP_PUBLIC_HOST` overrides it only if you
+ever put the portal behind a name that differs from the SFTP endpoint.
+
+**`npm start` and `npm restart` are not how this runs in production.** They start a second copy
+on port 3000 beside the one pm2 is already running, which is the `EADDRINUSE: address already
+in use :::3000` you get. Use pm2:
+
+```bash
+pm2 reload cidco-web      # restart the portal
+pm2 reload all            # everything
+./deploy.sh               # pull, build, reload — the usual one
+```
 
 ### Storage folders (`.env`)
 

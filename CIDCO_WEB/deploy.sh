@@ -52,10 +52,14 @@ pm2 save >/dev/null
 say "Running"
 pm2 ls
 
-cat <<'NOTE'
+# The port comes from .env, so this note matches wherever it is actually
+# listening rather than a number written into this file.
+PORT_IN_USE="$(node -p "require('./ecosystem.config.js').apps.find(a=>a.name==='cidco-web').env.PORT" 2>/dev/null || echo 3000)"
+
+cat <<NOTE
 
 Check it took:
-  pm2 logs cidco-poll --lines 5      a line every POLL_INTERVAL_MS
-  curl -s localhost:8040/api/health  {"database":"connected"}
+  pm2 logs cidco-poll --lines 5             a line every POLL_INTERVAL_MS
+  curl -s localhost:${PORT_IN_USE}/api/health   {"database":"connected"}
   the Data tab should read "Poll worker last ran Ns ago."
 NOTE
