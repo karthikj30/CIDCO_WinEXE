@@ -112,6 +112,9 @@ public class SetupFlowTests
         flow.TryAdvance(exists);
         Assert.Equal(SetupStep.Location, flow.Current);
         Assert.Equal("Next >", flow.NextButtonText);
+        // The step opens blank now, so it has to be answered to get past it.
+        flow.Latitude = "19.033";
+        flow.Longitude = "73.0297";
         flow.TryAdvance(exists);
         Assert.Equal(SetupStep.Install, flow.Current);
         Assert.Equal("Install", flow.NextButtonText);
@@ -129,7 +132,12 @@ public class SetupFlowTests
     [Fact]
     public void Advancing_past_the_last_step_stays_on_it()
     {
-        var flow = new SetupFlow { CsvFolder = @"C:\exports" };
+        var flow = new SetupFlow
+        {
+            CsvFolder = @"C:\exports",
+            Latitude = "19.033",
+            Longitude = "73.0297",
+        };
         var exists = FolderExists(@"C:\exports");
         for (var i = 0; i < 10; i++) flow.TryAdvance(exists);
         Assert.Equal(SetupStep.Install, flow.Current);
@@ -182,7 +190,10 @@ public class SetupFlowTests
         Assert.True(flow.TryAdvance(exists));
 
         Assert.Equal(SetupStep.Location, flow.Current);
-        Assert.True(flow.TryAdvance(exists)); // defaults are valid Navi Mumbai coords
+        Assert.False(flow.TryAdvance(exists));           // blank until detected or typed
+        flow.Latitude = "19.033";
+        flow.Longitude = "73.0297";
+        Assert.True(flow.TryAdvance(exists));
 
         Assert.Equal(SetupStep.Install, flow.Current);
         Assert.Equal(900, flow.ToSettings().IntervalSeconds);

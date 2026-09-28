@@ -341,64 +341,128 @@ internal sealed class SetupWizard : Form
     private void BuildLocationStep()
     {
         var y = Heading(
-            "Station coordinates",
-            "Latitude and longitude for this site. They are pre-filled for Navi Mumbai — " +
-            "change them if needed. After install they are locked and stamped onto every sent file.");
+            "Where is this station?",
+            "Detect reads the position from this PC. Check it, correct it if the site sits a little "
+            + "away, and it is locked after install \u2014 every file carries it.");
 
-        _body.Controls.Add(new Label
-        {
-            Text = "Latitude",
-            Font = Theme.Small,
-            ForeColor = Theme.Muted,
-            Location = new Point(24, y),
-            AutoSize = true,
-        });
-        var lat = new TextBox
-        {
-            Text = _flow.Latitude,
-            Location = new Point(24, y + 18),
-            Width = 180,
-            Font = Theme.Body,
-        };
-        lat.TextChanged += (_, _) => _flow.Latitude = lat.Text;
-        _body.Controls.Add(lat);
+        var boxes = new TextBox[2];
+        var titles = new[] { "Latitude", "Longitude" };
+        var seeds = new[] { _flow.Latitude, _flow.Longitude };
 
-        _body.Controls.Add(new Label
+        for (var i = 0; i < 2; i++)
         {
-            Text = "Longitude",
-            Font = Theme.Small,
-            ForeColor = Theme.Muted,
-            Location = new Point(220, y),
-            AutoSize = true,
-        });
-        var lon = new TextBox
-        {
-            Text = _flow.Longitude,
-            Location = new Point(220, y + 18),
-            Width = 180,
-            Font = Theme.Body,
-        };
-        lon.TextChanged += (_, _) => _flow.Longitude = lon.Text;
-        _body.Controls.Add(lon);
+            var x = 24 + i * 196;
+            _body.Controls.Add(new Label
+            {
+                Text = titles[i],
+                Font = Theme.Small,
+                ForeColor = Theme.Muted,
+                Location = new Point(x, y),
+                AutoSize = true,
+            });
+            var box = new TextBox
+            {
+                Text = seeds[i],
+                Location = new Point(x, y + 18),
+                Width = 180,
+                Font = Theme.Body,
+                PlaceholderText = i == 0 ? "e.g. 19.0330" : "e.g. 73.0297",
+            };
+            var which = i;
+            box.TextChanged += (_, _) =>
+            {
+                if (which == 0) _flow.Latitude = box.Text;
+                else _flow.Longitude = box.Text;
+            };
+            _body.Controls.Add(box);
+            boxes[i] = box;
+        }
 
         _status = new Label
         {
             Text = "",
             ForeColor = Theme.Bad,
             Font = Theme.Small,
-            Location = new Point(24, y + 52),
-            Size = new Size(390, 36),
+            Location = new Point(24, y + 82),
+            Size = new Size(400, 46),
         };
         _body.Controls.Add(_status);
 
+        var detect = new Button
+        {
+            Text = "Detect location",
+            Location = new Point(24, y + 50),
+            Size = new Size(136, 26),
+        };
+        detect.Click += async (_, _) =>
+        {
+            detect.Enabled = false;
+            detect.Text = "Detecting\u2026";
+            SetStatus("");
+
+            // Off the UI thread: Windows Location can take a couple of seconds
+            // the first time, and the network lookup has its own timeout.
+            var (fix, note) = await Task.Run(DetectLocation);
+
+            if (fix.HasPosition)
+            {
+                _flow.Latitude = fix.Latitude;
+                _flow.Longitude = fix.Longitude;
+                boxes[0].Text = fix.Latitude;
+                boxes[1].Text = fix.Longitude;
+                _status!.ForeColor = Theme.Faint;
+                _status.Text = $"From {fix.Describe}. {note}";
+            }
+            else
+            {
+                _status!.ForeColor = Theme.Bad;
+                _status.Text = note;
+            }
+
+            detect.Enabled = true;
+            detect.Text = "Detect location";
+        };
+        _body.Controls.Add(detect);
+
         _body.Controls.Add(new Label
         {
-            Text = "Decimal degrees, e.g. 19.0330 / 73.0297. Embedded in the file name on every send.",
+            Text = "Decimal degrees. Embedded in the file name on every send, and compared against "
+                 + "the position CIDCO registered for this site.",
             ForeColor = Theme.Faint,
             Font = Theme.Small,
-            Location = new Point(24, y + 92),
-            Size = new Size(390, 32),
+            Location = new Point(24, y + 132),
+            Size = new Size(400, 32),
         });
+    }
+
+    /// <summary>
+    /// Reads the position, and says what happened either way.
+    ///
+    /// The registered source is deliberately left out of the chain here: this
+    /// step is what produces the registered position, so including it would
+    /// just hand back whatever is already in the boxes and call it a
+    /// detection.
+    /// </summary>
+    private static (LocationFix Fix, string Note) DetectLocation()
+    {
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
+        {
+            var device = new WindowsLocationSource().Read(TimeSpan.FromSeconds(8));
+            if (device.HasPosition) return (device, "Accurate to roughly the building.");
+        }
+
+        var network = new NetworkLocationSource();
+        var byNetwork = network.Read(TimeSpan.FromSeconds(8));
+        if (byNetwork.HasPosition)
+        {
+            return (byNetwork, "This is the internet connection, not the building \u2014 it can be "
+                             + "a few kilometres out. Correct it if you know the site coordinates.");
+        }
+
+        var reason = network.LastProblem.Length > 0 ? $" ({network.LastProblem})" : "";
+        return (LocationFix.Unknown,
+            "Could not read a position. Turn on Location for desktop apps in Windows Settings, "
+            + "or type the coordinates in." + reason);
     }
 
     private void BuildInstallStep()

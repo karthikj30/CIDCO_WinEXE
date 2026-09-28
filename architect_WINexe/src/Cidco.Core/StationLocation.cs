@@ -179,25 +179,74 @@ public sealed class NetworkLocationSource : ILocationSource
     /// <summary>Free, no key, and returns plain JSON.</summary>
     public const string Endpoint = "http://ip-api.com/json/?fields=status,lat,lon";
 
+    /// <summary>
+    /// The same answer over TLS, from a different provider.
+    ///
+    /// The free ip-api tier is plain HTTP only, and a site network or a server
+    /// firewall that allows 443 and nothing else silently swallows it — which
+    /// left the agent with no live position at all and quietly falling back to
+    /// whatever was typed at install. Trying an HTTPS provider second costs one
+    /// request on a network where the first already worked.
+    /// </summary>
+    public const string SecureEndpoint = "https://ipwho.is/?fields=success,latitude,longitude";
+
     public NetworkLocationSource(Func<TimeSpan, string?>? fetch = null, Func<DateTimeOffset>? now = null)
     {
         _fetch = fetch ?? DefaultFetch;
         _now = now ?? (() => DateTimeOffset.Now);
     }
 
+    /// <summary>Why the last read failed, for the window to show.</summary>
+    public string LastProblem { get; private set; } = "";
+
     public LocationOrigin Origin => LocationOrigin.Network;
 
     public LocationFix Read(TimeSpan timeout)
     {
-        var body = _fetch(timeout);
-        if (string.IsNullOrWhiteSpace(body)) return LocationFix.Unknown;
-        return Parse(body, _now());
+        LastProblem = "";
+        string? body;
+        try
+        {
+            body = _fetch(timeout);
+        }
+        catch (Exception error)
+        {
+            LastProblem = error.Message;
+            return LocationFix.Unknown;
+        }
+
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            LastProblem = "the lookup returned nothing";
+            return LocationFix.Unknown;
+        }
+
+        var fix = Parse(body, _now());
+        if (!fix.HasPosition) LastProblem = "the lookup did not return a usable position";
+        return fix;
     }
 
+    /// <summary>
+    /// Plain HTTP first because it is the faster of the two, then TLS. Either
+    /// answering is enough; only both failing means no network position.
+    /// </summary>
     private static string? DefaultFetch(TimeSpan timeout)
     {
-        using var http = new HttpClient { Timeout = timeout };
-        return http.GetStringAsync(Endpoint).GetAwaiter().GetResult();
+        var half = TimeSpan.FromMilliseconds(Math.Max(1500, timeout.TotalMilliseconds / 2));
+        foreach (var url in new[] { Endpoint, SecureEndpoint })
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = half };
+                var body = http.GetStringAsync(url).GetAwaiter().GetResult();
+                if (!string.IsNullOrWhiteSpace(body)) return body;
+            }
+            catch
+            {
+                // Blocked, unreachable or too slow. Try the next one.
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -207,9 +256,17 @@ public sealed class NetworkLocationSource : ILocationSource
     /// </summary>
     public static LocationFix Parse(string body, DateTimeOffset at)
     {
-        if (!body.Contains("\"success\"", StringComparison.Ordinal)) return LocationFix.Unknown;
-        if (!TryNumber(body, "\"lat\"", out var lat)) return LocationFix.Unknown;
-        if (!TryNumber(body, "\"lon\"", out var lon)) return LocationFix.Unknown;
+        // ip-api answers {"status":"success","lat":…,"lon":…}
+        // ipwho.is answers {"success":true,"latitude":…,"longitude":…}
+        // Both carry "success"; the field names differ, so try either pair.
+        if (!body.Contains("success", StringComparison.OrdinalIgnoreCase)) return LocationFix.Unknown;
+        if (body.Contains("\"success\":false", StringComparison.OrdinalIgnoreCase)) return LocationFix.Unknown;
+        if (body.Contains("\"status\":\"fail\"", StringComparison.OrdinalIgnoreCase)) return LocationFix.Unknown;
+
+        if (!TryNumber(body, "\"lat\"", out var lat) && !TryNumber(body, "\"latitude\"", out lat))
+            return LocationFix.Unknown;
+        if (!TryNumber(body, "\"lon\"", out var lon) && !TryNumber(body, "\"longitude\"", out lon))
+            return LocationFix.Unknown;
         if (lat is < -90 or > 90 || lon is < -180 or > 180) return LocationFix.Unknown;
         return LocationFix.Of(lat, lon, LocationOrigin.Network, at);
     }

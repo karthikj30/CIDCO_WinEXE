@@ -122,12 +122,22 @@ exactly two files care — `RemotePath.cs` on the agent side, `ingestionPoll.ts`
 
 ### Step 1 — Install (once, on the architect's PC)
 
-`SetupWizard.cs` walks five screens: role → CSV folder → **station location** → schedule →
+`SetupWizard.cs` walks five screens: role → CSV folder → schedule → **station location** →
 install. `SetupFlow.cs` holds the decisions with no window attached, which is why the wizard's
 rules are covered by tests. The answers land in a local SQLite file via `Settings.cs`.
 
-The location typed here is the **registered** position — a fallback, and the point CIDCO
-measures against later.
+The location step opens **blank** with a **Detect location** button. Detect reads the position
+from the PC — Windows Location Service first, then a lookup from the public IP — fills the boxes
+and says which source answered, so a rough network fix is not mistaken for a precise one. The
+step will not pass until something is in it.
+
+It used to open pre-filled with Navi Mumbai, and an architect anywhere else clicked straight
+past it: the registered position became a city they had never visited, and because that value
+is also the last fallback at send time, every file claimed Kharghar. A blank field asks the
+question; a filled one answers it wrongly.
+
+The position recorded here is the **registered** one — the point CIDCO measures each delivery
+against on the map, and the fallback used only when nothing can measure where the PC is now.
 
 ### Step 2 — Send (every few hours, automatically)
 
@@ -365,19 +375,94 @@ npx prisma migrate deploy                     # production: applies what is alre
 
 ## 5. Running it
 
+### Deploying — one command, every time
+
 ```bash
 cd CIDCO_WEB
-npm install
-npx prisma migrate deploy
-npm run build
-
-# both of these have to stay up
-pm2 start node --name cidco-web  -- .next/standalone/server.js
-pm2 start npm  --name cidco-poll -- run poll
+./deploy.sh
 ```
 
-**Restart `cidco-web` after every build.** The old process keeps serving HTML that points at
-chunks the new build deleted, which shows up in the browser as `ChunkLoadError`.
+Pull, install, migrate, build, reload. Safe to run as often as you like: it **reloads** the
+processes named in `ecosystem.config.js` rather than starting new ones, so `pm2 ls` shows the
+same three however many times it has run.
+
+The first time only, or after a reboot:
+
+```bash
+pm2 startOrReload ecosystem.config.js
+pm2 save
+pm2 startup          # prints a command to run once, so pm2 comes back on boot
+```
+
+Changed only a `.env` value, like the poll interval? Skip the build:
+
+```bash
+./deploy.sh --no-build
+```
+
+**Why not `pm2 start`:** `pm2 start` on a name that already exists adds *another* copy. Run it
+after every deploy and you end up with six `cidco-web` processes, all listening, with the old
+ones still serving the previous build. `startOrReload` starts what is missing and reloads what
+is already there, which is what `deploy.sh` uses.
+
+If duplicates have already built up:
+
+```bash
+pm2 delete all
+pm2 startOrReload ecosystem.config.js
+pm2 save
+```
+
+**`cidco-web` must be reloaded after every build.** The old process keeps serving HTML that
+points at chunks the new build deleted — in the browser that is `ChunkLoadError`. `deploy.sh`
+does this for you.
+
+### Scheduling the two polls
+
+By default one process runs both, every 15 seconds:
+
+```bash
+npm run poll                       # POLL_INTERVAL_MS, default 15000
+```
+
+They can also run apart, on their own schedules. Poll1 only reads file names and is cheap, so
+it can run often and file a delivery the moment it lands; poll2 parses whole spreadsheets and
+is usually happy to run less often:
+
+```bash
+POLL1_INTERVAL_MS=5000   npm run poll -- --only=1
+POLL2_INTERVAL_MS=60000  npm run poll -- --only=2
+
+npm run poll -- --only=2 --interval=30000     # or set it on the command line
+```
+
+Interval, most specific first: `--interval=` → `POLL1_INTERVAL_MS` / `POLL2_INTERVAL_MS` →
+`POLL_INTERVAL_MS` → 15000.
+
+To run them as two pm2 processes, comment out `cidco-poll` in `ecosystem.config.js` and
+uncomment `cidco-poll1` and `cidco-poll2` below it, then `./deploy.sh --no-build`.
+
+**Cron is the wrong tool here.** Cron's floor is one minute, and a new `tsx` process per tick
+costs a second or two of startup before it does any work. The worker already schedules the next
+tick only once the current one has finished, so a slow spreadsheet can never have a second run
+racing it over the same inbox — which is exactly how one delivery gets ingested twice. If you
+do want cron, drive the API instead of spawning a worker:
+
+```
+* * * * * curl -s -X POST -H "Cookie: <officer session>" \
+          "http://localhost:8040/api/admin/sftp/poll?which=1" >/dev/null
+```
+
+### Choosing an interval
+
+| Interval | Suits |
+|---|---|
+| 5–15 s | A live dashboard. What CIDCO runs. |
+| 60 s | Agents sending hourly. Nothing is lost; the Data tab lags a minute. |
+| 5 min+ | Very large sheets, or a server doing other work. |
+
+An interval longer than the agent's send interval is fine — deliveries queue in the inbox and
+are filed in order.
 
 ### Storage folders (`.env`)
 

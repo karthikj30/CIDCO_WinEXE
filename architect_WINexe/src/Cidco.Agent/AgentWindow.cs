@@ -118,8 +118,21 @@ internal sealed class AgentWindow : Form
         {
             _latitude.Text = fix.Latitude;
             _longitude.Text = fix.Longitude;
-            _locationNote.Text = $"from {fix.Describe}";
-            _locationNote.ForeColor = fix.Origin == LocationOrigin.Registered ? Theme.Muted : Theme.Faint;
+
+            // Falling back to the install-time position means nothing could
+            // measure where this PC is now — so every file is being stamped
+            // with where it was set up, wherever it has since been taken. That
+            // is worth saying loudly rather than in the same grey as a real fix.
+            if (fix.Origin == LocationOrigin.Registered)
+            {
+                _locationNote.ForeColor = Theme.Bad;
+                _locationNote.Text = "install position \u2014 live location unavailable";
+            }
+            else
+            {
+                _locationNote.ForeColor = Theme.Faint;
+                _locationNote.Text = $"from {fix.Describe}";
+            }
             return;
         }
 

@@ -76,9 +76,6 @@ public sealed class Settings
         public const int Port = 2222;
         public const string Username = "cidco@example.com";
         public const string SiteName = "ABCD123";
-        /// <summary>Navi Mumbai — pre-filled so the installer has a starting point.</summary>
-        public const string Latitude = "19.0330";
-        public const string Longitude = "73.0297";
     }
 
     public static Settings Load(Database db)
@@ -125,7 +122,5 @@ public sealed class Settings
     public string IpOrDefault => string.IsNullOrWhiteSpace(DesignatedIp) ? Defaults.DesignatedIp : DesignatedIp;
     public string UsernameOrDefault => string.IsNullOrWhiteSpace(Username) ? Defaults.Username : Username;
     public string SiteNameOrDefault => string.IsNullOrWhiteSpace(SiteName) ? Defaults.SiteName : SiteName;
-    public string LatitudeOrDefault => string.IsNullOrWhiteSpace(Latitude) ? Defaults.Latitude : Latitude;
-    public string LongitudeOrDefault => string.IsNullOrWhiteSpace(Longitude) ? Defaults.Longitude : Longitude;
     public int PortOrDefault => Port <= 0 ? Defaults.Port : Port;
 }

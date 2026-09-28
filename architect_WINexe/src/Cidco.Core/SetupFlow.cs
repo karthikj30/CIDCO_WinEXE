@@ -25,8 +25,17 @@ public sealed class SetupFlow
     public string Role { get; set; } = "architect";
     public string CsvFolder { get; set; } = "";
     public string IntervalLabel { get; set; } = Schedule.LabelFor(Schedule.DefaultSeconds);
-    public string Latitude { get; set; } = Settings.Defaults.Latitude;
-    public string Longitude { get; set; } = Settings.Defaults.Longitude;
+    /// <summary>
+    /// Where the station is, in decimal degrees.
+    ///
+    /// Deliberately empty to begin with. These used to arrive pre-filled with
+    /// Navi Mumbai, and an architect anywhere else clicked past the step
+    /// without touching them — so the position CIDCO registered, and the one
+    /// every file fell back to, was a city they had never been to. A blank
+    /// field asks the question; a filled one answers it wrongly.
+    /// </summary>
+    public string Latitude { get; set; } = "";
+    public string Longitude { get; set; } = "";
 
     /// <summary>The last thing that stopped the wizard moving on, if anything.</summary>
     public string Status { get; private set; } = "";
