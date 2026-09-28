@@ -204,7 +204,7 @@ Shared SFTP defaults (override in `.env`): user `cidco@example.com` / password `
 
 ## C. On the server, over PuTTY
 
-### The short version — pull, rebuild, restart
+### The short version — pull, rebuild, restart both portals
 
 ```bash
 cd ~/CIDCO_WinEXE/CIDCO_WEB
@@ -247,28 +247,88 @@ CIDCO_WEB_URL="http://13.127.203.85:8040"
 JWT_SECRET=<<the same value as CIDCO_WEB>>
 ```
 
-`JWT_SECRET` must match. Cookies ignore the port, so one sign-in covers both —
-with different secrets an architect who signed in at the front door lands on a
-login form. Both addresses are read at request time, so changing a port is an
-`.env` edit and `pm2 reload`, never a rebuild.
+Both addresses are read at request time, so changing a port is an `.env` edit
+and `pm2 reload`, never a rebuild.
+
+#### What `JWT_SECRET` is, and when to change it
+
+**Set it once. It is not per user, and it does not change when somebody logs
+in.**
+
+When anyone signs in, the server makes a small signed note — a JSON Web Token —
+saying *who* they are, *what role* they have and *when it expires* (12 hours),
+and puts it in a cookie. `JWT_SECRET` is the key it signs that note with.
+
+On every later request the server re-checks the signature with the same key. If
+it matches, the note is genuine and the request is that person. If it does not,
+the note is rejected. That is the whole mechanism: **the secret proves the note
+came from your server**, so nobody can hand-write a cookie claiming to be a
+CIDCO officer.
+
+The token itself is different for every user and every sign-in. The **secret**
+is one value for the installation:
+
+| | |
+| --- | --- |
+| Per user? | No. One value for the whole server |
+| Change on each login? | No. Never touched by logging in |
+| Must both portals match? | **Yes.** Cookies ignore the port, so the cookie CIDCO_WEB sets is sent to arch_web too. Different secrets and arch_web rejects it — an architect who just signed in lands on a login form with no explanation |
+| Change it when? | Only if it leaks, or when rotating credentials deliberately. Everyone is signed out and has to log in again — nothing else breaks |
+| How long? | 32+ random characters. `openssl rand -base64 48` |
+
+```bash
+openssl rand -base64 48        # generate once, paste into BOTH .env files
+```
+
+It is not the architect's API token, and not their SFTP password — those are
+per architect and live in the database. This is only the server's own signing
+key for browser sessions.
 
 ### First time on a box, or after a reboot
 
 ```bash
+# 1. once per machine
 sudo npm install -g pm2
-cd ~/CIDCO_WinEXE/CIDCO_WEB
 
+# 2. get the code
+cd ~
+git clone https://github.com/karthikj30/CIDCO_WinEXE.git      # or: cd CIDCO_WinEXE && git pull
+cd CIDCO_WinEXE
+
+# 3. settings — see the block below for what goes in each
+nano CIDCO_WEB/.env                      # DATABASE_URL, PORT, ARCH_WEB_*, JWT_SECRET
+cp arch_web/.env.example arch_web/.env
+nano arch_web/.env                       # DATABASE_URL, CIDCO_WEB_URL, the SAME JWT_SECRET
+
+# 4. the CIDCO portal — this also owns the database
+cd CIDCO_WEB
 npm ci
 npx prisma migrate deploy
 npm run build
 
+# 5. the architect API portal
+cd ../arch_web
+npm ci                                   # generates its own Prisma client
+npm run build
+
+# 6. start everything
+cd ../CIDCO_WEB
 pm2 startOrReload ecosystem.config.js
 pm2 save
-pm2 startup                    # run the sudo line it prints, once
+pm2 startup                              # run the sudo line it prints, once
 ```
 
-Three processes come up: **cidco-web** (the portal), **cidco-poll** (ingestion)
-and **cidco-sftp** (the SFTP intake).
+Four processes come up:
+
+| pm2 name | What | Listens on |
+| --- | --- | --- |
+| `cidco-web` | the CIDCO officer portal — both channels — and the architect's SFTP workspace | `PORT` |
+| `arch-web` | the architect's API portal and the endpoints their station posts to | `ARCH_WEB_PORT` |
+| `cidco-poll` | ingestion: poll1 and poll2 | — |
+| `cidco-sftp` | the SFTP intake the Windows agent connects to | `SFTP_PORT` |
+
+After that, every deploy is just `./deploy.sh` from `CIDCO_WEB` — it pulls,
+installs, migrates, builds **both** portals and reloads all four.
 
 ### Never use `npm start` or `npm restart` here
 

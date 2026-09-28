@@ -9,8 +9,9 @@
     "postbuild": "node scripts/copy-standalone-assets.mjs",
     "start": "next start -p 3001",
     "lint": "next lint",
-    "db:generate": "prisma generate --schema ../CIDCO_WEB/prisma/schema.prisma",
-    "prebuild": "node scripts/check-shared-lib.mjs"
+    "db:generate": "node scripts/sync-schema.mjs && prisma generate",
+    "prebuild": "node scripts/check-shared-lib.mjs",
+    "postinstall": "node scripts/sync-schema.mjs && prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
