@@ -19,6 +19,20 @@ id_ed25519*
 .vs/
 .idea/
 
+# --- arch_web (the architect API portal) ---
+# node_modules here is a symlink to CIDCO_WEB's, so it must never be committed.
+arch_web/node_modules
+arch_web/node_modules/
+arch_web/.next/
+arch_web/out/
+arch_web/build/
+# Its .env holds the same database password as CIDCO_WEB's; .env.example is
+# the one that ships.
+arch_web/.env
+arch_web/.env.local
+arch_web/*.tsbuildinfo
+arch_web/next-env.d.ts
+
 # --- CIDCO_WEB ---
 CIDCO_WEB/node_modules/
 CIDCO_WEB/.next/

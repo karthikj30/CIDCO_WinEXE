@@ -67,6 +67,16 @@ function NavButton({ active, onClick, children }: { active: boolean; onClick: ()
 }
 
 export default function ArchitectWorkspace() {
+  // The documentation lives on the CIDCO portal, usually another port. Asked
+  // of the server so the address is not baked into the bundle.
+  const [cidco, setCidco] = useState('');
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setCidco(j?.data?.cidcoWebUrl ?? ''))
+      .catch(() => {});
+  }, []);
+
   const [me, setMe] = useState<MeData | null>(null);
   const [architect, setArchitect] = useState<Architect | null>(null);
   const [tab, setTab] = useState<Tab>('connection');
@@ -162,7 +172,7 @@ export default function ArchitectWorkspace() {
               {live ? `${live.clientId}` : 'Validate on the Connection tab'}
             </p>
           </div>
-          <a href="/docs/architect" target="_blank" rel="noreferrer" className="mb-3 block text-xs font-medium text-emerald-700 hover:underline">
+          <a href={`${cidco}/docs/architect`} target="_blank" rel="noreferrer" className="mb-3 block text-xs font-medium text-emerald-700 hover:underline">
             → API documentation
           </a>
           <div className="flex items-center justify-between">

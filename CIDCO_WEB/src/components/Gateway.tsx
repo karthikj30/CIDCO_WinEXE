@@ -24,6 +24,8 @@ const CHANNELS = [
     blurb: 'Token-authenticated REST. The architect’s station posts readings to CIDCO every few hours.',
     detail: 'Access + refresh tokens · automated sending · live reading feed',
     officerHref: '/cidco',
+    // Filled in at runtime from /api/config — the API channel is its own app
+    // on its own port, and that address must not be baked into the bundle.
     architectHref: '/architect',
     accent: 'cidco',
     icon: (
@@ -80,6 +82,8 @@ const OFFICER_DESK = {
 export default function Gateway() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  /** Where the architect API portal lives, asked of the server at load. */
+  const [archWeb, setArchWeb] = useState('');
   const [role, setRole] = useState<Role>('CIDCO_OFFICER');
   const [mode, setMode] = useState<Mode>('signin');
   const [form, setForm] = useState({ email: '', password: '', name: '', firmName: '', councilRegNo: '', phone: '', signupCode: '' });
@@ -99,6 +103,13 @@ export default function Gateway() {
     } catch {
       setUser(null);
     }
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setArchWeb(j?.data?.archWebUrl ?? ''))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -195,7 +206,12 @@ export default function Gateway() {
         */}
         <div className={`mt-8 grid gap-5 ${isOfficer ? '' : 'sm:grid-cols-2'}`}>
           {(isOfficer ? [OFFICER_DESK] : CHANNELS).map((c) => {
-            const href = isOfficer ? c.officerHref : c.architectHref;
+            // The API channel may live on another host; the SFTP one is here.
+            const href = isOfficer
+              ? c.officerHref
+              : c.key === 'API' && archWeb
+                ? `${archWeb}/`
+                : c.architectHref;
             const violet = c.accent === 'violet';
             return (
               <a

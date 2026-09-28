@@ -222,6 +222,36 @@ Changed only an `.env` value, like the poll interval or the port?
 ./deploy.sh --no-build
 ```
 
+### The three web processes
+
+| pm2 name | What | Port from |
+|---|---|---|
+| `cidco-web` | the CIDCO officer portal, both channels, plus the architect's SFTP workspace | `PORT` in `CIDCO_WEB/.env` |
+| `arch-web` | the architect's API portal and the endpoints their station posts to | `ARCH_WEB_PORT` in `CIDCO_WEB/.env` |
+| `cidco-poll` | ingestion — poll1 and poll2 | n/a |
+| `cidco-sftp` | the SFTP intake the Windows agent connects to | `SFTP_PORT` |
+
+`deploy.sh` builds both portals in one pass. They share a database, so a deploy
+that rebuilt only half would leave the two disagreeing about the schema.
+
+Tell each where the other is, in `.env`:
+
+```
+# CIDCO_WEB/.env
+PORT=8040
+ARCH_WEB_PORT=8041
+ARCH_WEB_URL="http://13.127.203.85:8041"
+
+# arch_web/.env
+CIDCO_WEB_URL="http://13.127.203.85:8040"
+JWT_SECRET=<<the same value as CIDCO_WEB>>
+```
+
+`JWT_SECRET` must match. Cookies ignore the port, so one sign-in covers both —
+with different secrets an architect who signed in at the front door lands on a
+login form. Both addresses are read at request time, so changing a port is an
+`.env` edit and `pm2 reload`, never a rebuild.
+
 ### First time on a box, or after a reboot
 
 ```bash
@@ -305,10 +335,15 @@ pm2 logs cidco-poll --lines 5 --nostream
 pm2 logs cidco-sftp --lines 5 --nostream
 ss -ltnp | grep 2222
 
-# every page answering
-for r in / /cidco /cidco/sftp /architect /architect/sftp; do
-  printf '%-18s %s\n' "$r" "$(curl -s -o /dev/null -w '%{http_code}' localhost:8040$r)"
+# every page answering, on both portals
+for r in / /cidco /cidco/sftp /architect/sftp; do
+  printf '  8040%-18s %s\n' "$r" "$(curl -s -o /dev/null -w '%{http_code}' localhost:8040$r)"
 done
+printf '  8041/%-17s %s\n' "" "$(curl -s -o /dev/null -w '%{http_code}' localhost:8041/)"
+
+# do the two know about each other?
+curl -s localhost:8040/api/config     # {"archWebUrl":"http://…:8041"}
+curl -s localhost:8041/api/config     # {"cidcoWebUrl":"http://…:8040"}
 ```
 
 In the browser, signed in as an officer:

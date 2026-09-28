@@ -35,8 +35,18 @@ say "Applying migrations"
 npx prisma migrate deploy
 
 if [[ $BUILD -eq 1 ]]; then
-  say "Building"
+  say "Building the CIDCO portal"
   npm run build
+
+  # The architect API portal is a separate app beside this one. It shares the
+  # database and the Prisma schema, so it is built in the same pass — a deploy
+  # that rebuilt only half would leave the two disagreeing about the schema.
+  if [[ -d ../arch_web ]]; then
+    say "Building the architect API portal"
+    ( cd ../arch_web
+      if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+      npm run build )
+  fi
 else
   say "Skipping build (--no-build)"
 fi

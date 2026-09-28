@@ -44,6 +44,9 @@ function fromEnvFile(name, fallback) {
 }
 
 const PORT = fromEnvFile('PORT', '3000');
+// The architect API portal is its own app, one folder up and across.
+const ARCH = path.join(cwd, '..', 'arch_web');
+const ARCH_PORT = fromEnvFile('ARCH_WEB_PORT', '3001');
 // 0.0.0.0 so the port is reachable from outside the box; which addresses may
 // actually reach it is the firewall's business, not this file's.
 const HOSTNAME = fromEnvFile('HOSTNAME', '0.0.0.0');
@@ -101,6 +104,21 @@ module.exports = {
     //   autorestart: true,
     //   time: true,
     // },
+
+    {
+      // The architect's API dashboard, and the token-authenticated endpoints
+      // their stations post readings to. Same database, its own port.
+      name: 'arch-web',
+      cwd: ARCH,
+      script: path.join(ARCH, '.next/standalone/arch_web/server.js'),
+      env: { NODE_ENV: 'production', PORT: ARCH_PORT, HOSTNAME },
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_memory_restart: '600M',
+      merge_logs: true,
+      time: true,
+    },
 
     {
       name: 'cidco-sftp',

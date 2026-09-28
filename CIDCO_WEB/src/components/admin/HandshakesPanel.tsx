@@ -244,7 +244,19 @@ function HandshakeDetail({ handshakeId, clientId, onChanged }: { handshakeId: st
   const [freshPair, setFreshPair] = useState<{ access: string | null; refresh: string | null } | null>(null);
   // Read after mount so server and client markup match.
   const [origin, setOrigin] = useState('');
-  useEffect(() => setOrigin(window.location.origin), []);
+  // The API channel lives on arch_web, so the URLs an officer copies for an
+  // architect have to name that host. Asked of the server rather than baked in,
+  // because the address changes and a rebuild should not be the way to change it.
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    fetch('/api/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const url = j?.data?.archWebUrl;
+        if (url) setOrigin(String(url).replace(/\/+$/, ''));
+      })
+      .catch(() => {});
+  }, []);
   // policy + expiry editors
   const [accessTtl, setAccessTtl] = useState('7');
   const [refreshTtl, setRefreshTtl] = useState('30');

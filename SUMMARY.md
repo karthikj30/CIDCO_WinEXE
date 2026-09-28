@@ -1,11 +1,20 @@
 # CIDCO AQI Compliance Portal — how it is built and how to work on it
 
-One system in two halves that never share a process:
+Three deployables, one database:
 
-| Half | Folder | What it is | Runs on |
-|---|---|---|---|
-| **The agent** | `architect_WINexe/` | A Windows desktop app the architect installs. Picks up the newest AQI CSV, renames it, sends it. | The architect's PC |
-| **The portal** | `CIDCO_WEB/` | The web portal, the SFTP intake, the two ingestion polls, and the database. | CIDCO's server |
+| Folder | What it is | Runs on |
+|---|---|---|
+| `CIDCO_WEB/` | **The CIDCO portal.** One officer dashboard covering both channels, the SFTP intake, the two ingestion polls. Also serves the architect's SFTP workspace, because that is the channel the Windows agent delivers into. | CIDCO's server, its own port |
+| `arch_web/` | **The architect's API portal.** Their dashboard, and the token-authenticated endpoints their station posts readings to. | CIDCO's server, its own port |
+| `architect_WINexe/` | **The agent.** A Windows desktop app. Picks up the newest AQI CSV, renames it, sends it. | The architect's PC |
+
+An architect uses one channel or the other: the API portal, or the agent. A
+CIDCO officer sees both on one dashboard, because their job does not divide by
+transport.
+
+`arch_web` and `CIDCO_WEB` read and write the same PostgreSQL database and
+share the same session cookie — cookies ignore the port, so one sign-in covers
+both, provided `JWT_SECRET` matches.
 
 They are joined by exactly two things: **an upload** (SFTP or HTTP) and **a file name**. Nothing
 else crosses. That is deliberate — the agent cannot reach the database, and the portal cannot
@@ -487,6 +496,42 @@ do want cron, drive the API instead of spawning a worker:
 
 An interval longer than the agent's send interval is fine — deliveries queue in the inbox and
 are filed in order.
+
+### The two portals, and how they find each other
+
+Neither address is baked into a build. Both are read at request time, so moving
+one is an `.env` edit and a reload:
+
+| Setting | In | Means |
+|---|---|---|
+| `PORT` | `CIDCO_WEB/.env` | where the CIDCO portal listens |
+| `ARCH_WEB_PORT` | `CIDCO_WEB/.env` | where pm2 starts the architect portal |
+| `ARCH_WEB_URL` | `CIDCO_WEB/.env` | the architect portal's public address. The front door's API card points here, and so do the endpoints CIDCO issues with a token |
+| `CIDCO_WEB_URL` | `arch_web/.env` | the CIDCO portal's public address, for the links back |
+| `JWT_SECRET` | **both**, identical | one sign-in across both ports. Different values and an architect who signed in at the front door lands on a login form |
+
+`NEXT_PUBLIC_` variables would have been simpler and are wrong here: Next bakes
+those into the bundle at build time, so changing a port would mean rebuilding.
+Both portals serve their address from `/api/config` instead.
+
+Leave `ARCH_WEB_URL` and `CIDCO_WEB_URL` unset and every link stays relative —
+which is how it behaved before the split, so an installation that has not been
+reconfigured keeps working.
+
+### The shared plumbing
+
+`arch_web/src/lib/` holds a copy of eleven modules from `CIDCO_WEB/src/lib/` —
+auth, the Prisma client, validation, the handshake rules — so that it can be
+built and deployed on its own.
+
+A copy drifts, and the failure that causes is quiet: a token that validates on
+one port and not the other. `arch_web/scripts/check-shared-lib.mjs` runs before
+every build and fails it if any of the eleven differ, naming the file. It
+already caught one during the split.
+
+The Prisma **schema** is not copied: `arch_web` generates its client from
+`../CIDCO_WEB/prisma/schema.prisma`, so there is one schema and one set of
+migrations, owned by `CIDCO_WEB`.
 
 ### Ports and addresses
 
