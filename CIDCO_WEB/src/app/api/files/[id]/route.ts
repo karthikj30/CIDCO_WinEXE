@@ -15,10 +15,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const attachment = await prisma.attachment.findUnique({
       where: { id },
-      include: { report: { select: { userId: true } } },
+      // The attachment hangs off whichever reading table carried it.
+      include: {
+        report: { select: { userId: true } },
+        sftpReading: { select: { userId: true } },
+        apiReading: { select: { userId: true } },
+      },
     });
     if (!attachment) return fail('File not found', 404);
-    if (auth.user.role === 'ARCHITECT' && attachment.report.userId !== auth.user.id) return forbidden();
+    const ownerId =
+      attachment.report?.userId ?? attachment.sftpReading?.userId ?? attachment.apiReading?.userId ?? null;
+    if (auth.user.role === 'ARCHITECT' && ownerId !== auth.user.id) return forbidden();
 
     const buffer = await readUpload(attachment.storedName);
     const isInline = attachment.mimeType.startsWith('image/') || attachment.mimeType === 'application/pdf';

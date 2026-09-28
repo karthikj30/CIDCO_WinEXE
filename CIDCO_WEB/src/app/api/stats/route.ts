@@ -1,8 +1,7 @@
 import type { NextRequest } from 'next/server';
-import type { Prisma } from '@prisma/client';
 import { authenticate } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { handleError, ok, unauthorized } from '@/lib/api';
+import { aggregateAqi, countReadings, countReadingsBy, findReadings } from '@/lib/readings';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,15 +11,15 @@ export async function GET(req: NextRequest) {
     const auth = await authenticate(req);
     if (!auth) return unauthorized();
 
-    const scope: Prisma.ReportWhereInput =
-      auth.user.role === 'ARCHITECT' ? { userId: auth.user.id } : {};
+    // The tiles count every channel, so all three reading tables are in scope.
+    const scope = auth.user.role === 'ARCHITECT' ? { userId: auth.user.id } : {};
 
-    const [total, byStatus, bySource, aggregate, recent] = await Promise.all([
-      prisma.report.count({ where: scope }),
-      prisma.report.groupBy({ by: ['status'], where: scope, _count: { _all: true } }),
-      prisma.report.groupBy({ by: ['source'], where: scope, _count: { _all: true } }),
-      prisma.report.aggregate({ where: scope, _avg: { aqiValue: true }, _max: { aqiValue: true }, _min: { aqiValue: true } }),
-      prisma.report.findMany({
+    const [total, byStatus, bySource, aqi, recent] = await Promise.all([
+      countReadings(scope),
+      countReadingsBy('status', scope),
+      countReadingsBy('source', scope),
+      aggregateAqi(scope),
+      findReadings({
         where: scope,
         orderBy: { createdAt: 'desc' },
         take: 5,
@@ -30,13 +29,9 @@ export async function GET(req: NextRequest) {
 
     return ok({
       totalReports: total,
-      byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count._all])),
-      bySource: Object.fromEntries(bySource.map((s) => [s.source, s._count._all])),
-      aqi: {
-        average: aggregate._avg.aqiValue ? Math.round(aggregate._avg.aqiValue) : null,
-        max: aggregate._max.aqiValue,
-        min: aggregate._min.aqiValue,
-      },
+      byStatus,
+      bySource,
+      aqi: { average: aqi.average, max: aqi.max, min: aqi.min },
       recent,
     });
   } catch (error) {

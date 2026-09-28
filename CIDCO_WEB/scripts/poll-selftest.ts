@@ -220,8 +220,8 @@ async function main() {
   check('nonsense values fail at step 7', Boolean(dataRow),
     dataRow?.fileStatus?.split('\n').find((l) => l.includes('FAILED')));
 
-  check('readings reached the reports table',
-    (await prisma.report.count({ where: { source: 'SFTP' } })) > 0);
+  check('readings reached the sftp_readings table',
+    (await prisma.sftpReading.count({ where: { source: 'SFTP' } })) > 0);
 
   // --- two deliveries landing on the same second -------------------------
   const sameSecond = stamp(-300);

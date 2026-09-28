@@ -12,9 +12,12 @@
 --
 --   psql -h localhost -U <user> -d <database> -v ON_ERROR_STOP=1 -f prisma/full_schema.sql
 --
--- It creates 16 tables and 14 enum types, including the two that matter most:
---   companies  — the MASTER table (companyId, publicKey, privateKey, userId)
---   data_files — the DATA table  (companyId, timestamp, aqiData, fileStatus)
+-- It creates 20 tables and 14 enum types, including the ones that matter most:
+--   companies     — the MASTER table (siteName, publicKey, privateKey, userId)
+--   data_files    — the DATA table   (siteName, timestamp, aqiData, fileStatus)
+--   sftp_readings — every reading the architect's agent delivered over SFTP
+--   api_readings  — every reading posted to the CIDCO REST API
+--   reports       — readings CIDCO took in by hand (web form, CSV upload)
 --
 -- Run it against an EMPTY database. It does not drop anything, so a second run
 -- fails on the first object that already exists — which is the safe way round.
@@ -150,9 +153,95 @@ CREATE TABLE "reports" (
 );
 
 -- CreateTable
+CREATE TABLE "sftp_readings" (
+    "id" TEXT NOT NULL,
+    "referenceNo" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "projectId" TEXT,
+    "source" "ReportSource" NOT NULL DEFAULT 'SFTP',
+    "status" "ReportStatus" NOT NULL DEFAULT 'SUBMITTED',
+    "siteName" TEXT NOT NULL,
+    "location" TEXT NOT NULL,
+    "latitude" DOUBLE PRECISION,
+    "longitude" DOUBLE PRECISION,
+    "measuredAt" TIMESTAMP(3) NOT NULL,
+    "aqiValue" INTEGER NOT NULL,
+    "pm25" DOUBLE PRECISION,
+    "pm10" DOUBLE PRECISION,
+    "so2" DOUBLE PRECISION,
+    "no2" DOUBLE PRECISION,
+    "co" DOUBLE PRECISION,
+    "ozone" DOUBLE PRECISION,
+    "remarks" TEXT,
+    "projectSiteId" TEXT,
+    "monitoringStationId" TEXT,
+    "oem" TEXT,
+    "deviceModel" TEXT,
+    "temperature" DOUBLE PRECISION,
+    "humidity" DOUBLE PRECISION,
+    "integrationMethod" TEXT,
+    "otherParams" JSONB,
+    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewedBy" TEXT,
+    "reviewNote" TEXT,
+    "reviewedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "companyRecordId" TEXT,
+    "dataFileId" TEXT,
+    "deliveredName" TEXT,
+
+    CONSTRAINT "sftp_readings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "api_readings" (
+    "id" TEXT NOT NULL,
+    "referenceNo" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "projectId" TEXT,
+    "source" "ReportSource" NOT NULL DEFAULT 'API',
+    "status" "ReportStatus" NOT NULL DEFAULT 'SUBMITTED',
+    "siteName" TEXT NOT NULL,
+    "location" TEXT NOT NULL,
+    "latitude" DOUBLE PRECISION,
+    "longitude" DOUBLE PRECISION,
+    "measuredAt" TIMESTAMP(3) NOT NULL,
+    "aqiValue" INTEGER NOT NULL,
+    "pm25" DOUBLE PRECISION,
+    "pm10" DOUBLE PRECISION,
+    "so2" DOUBLE PRECISION,
+    "no2" DOUBLE PRECISION,
+    "co" DOUBLE PRECISION,
+    "ozone" DOUBLE PRECISION,
+    "remarks" TEXT,
+    "projectSiteId" TEXT,
+    "monitoringStationId" TEXT,
+    "oem" TEXT,
+    "deviceModel" TEXT,
+    "temperature" DOUBLE PRECISION,
+    "humidity" DOUBLE PRECISION,
+    "integrationMethod" TEXT,
+    "otherParams" JSONB,
+    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewedBy" TEXT,
+    "reviewNote" TEXT,
+    "reviewedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "handshakeId" TEXT,
+    "tokenPrefix" TEXT,
+    "sourceIp" TEXT,
+
+    CONSTRAINT "api_readings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "attachments" (
     "id" TEXT NOT NULL,
-    "reportId" TEXT NOT NULL,
+    "reportId" TEXT,
+    "sftpReadingId" TEXT,
+    "apiReadingId" TEXT,
     "kind" "AttachmentKind" NOT NULL,
     "fileName" TEXT NOT NULL,
     "storedName" TEXT NOT NULL,
@@ -275,16 +364,42 @@ CREATE TABLE "token_deliveries" (
 );
 
 -- CreateTable
+CREATE TABLE "nodes" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "nodes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "departments" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "departments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "companies" (
     "id" TEXT NOT NULL,
-    "companyId" TEXT NOT NULL,
-    "companyName" TEXT NOT NULL,
-    "architectServerIp" TEXT NOT NULL,
-    "filePath" TEXT NOT NULL DEFAULT '',
+    "siteName" TEXT NOT NULL,
     "publicKey" TEXT,
     "privateKey" TEXT,
     "userId" TEXT,
-    "contactEmail" TEXT,
+    "designatedPath" TEXT NOT NULL DEFAULT '',
+    "mobile" TEXT,
+    "email" TEXT,
+    "address" TEXT,
+    "architectName" TEXT,
+    "registeredLatitude" DOUBLE PRECISION,
+    "registeredLongitude" DOUBLE PRECISION,
+    "permittedRadiusMetres" INTEGER NOT NULL DEFAULT 500,
+    "departmentId" TEXT,
+    "nodeId" TEXT,
     "architectId" TEXT,
     "notes" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
@@ -304,9 +419,9 @@ CREATE TABLE "sftp_uploads" (
     "sizeBytes" INTEGER NOT NULL,
     "status" "SftpUploadStatus" NOT NULL DEFAULT 'RECEIVED',
     "mode" "TransferMode" NOT NULL DEFAULT 'DIRECT_SFTP',
-    "presentedCompanyId" TEXT,
+    "presentedSiteName" TEXT,
     "presentedPath" TEXT,
-    "companyIdMatch" BOOLEAN NOT NULL DEFAULT false,
+    "siteNameMatch" BOOLEAN NOT NULL DEFAULT false,
     "pathMatch" BOOLEAN NOT NULL DEFAULT false,
     "validationPassed" BOOLEAN NOT NULL DEFAULT false,
     "rejectionReason" TEXT,
@@ -327,7 +442,7 @@ CREATE TABLE "sftp_uploads" (
 CREATE TABLE "data_files" (
     "id" TEXT NOT NULL,
     "companyRecordId" TEXT NOT NULL,
-    "companyId" TEXT NOT NULL,
+    "siteName" TEXT NOT NULL,
     "monthFolder" TEXT NOT NULL,
     "dateFolder" TEXT NOT NULL DEFAULT 'pending',
     "timestampFolder" TEXT NOT NULL,
@@ -335,6 +450,8 @@ CREATE TABLE "data_files" (
     "relativePath" TEXT NOT NULL,
     "fileName" TEXT NOT NULL,
     "deliveredName" TEXT,
+    "latitude" DOUBLE PRECISION,
+    "longitude" DOUBLE PRECISION,
     "sizeBytes" INTEGER NOT NULL,
     "rowCount" INTEGER NOT NULL DEFAULT 0,
     "importedCount" INTEGER NOT NULL DEFAULT 0,
@@ -412,7 +529,58 @@ CREATE INDEX "reports_projectSiteId_idx" ON "reports"("projectSiteId");
 CREATE INDEX "reports_companyRecordId_idx" ON "reports"("companyRecordId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "sftp_readings_referenceNo_key" ON "sftp_readings"("referenceNo");
+
+-- CreateIndex
+CREATE INDEX "sftp_readings_userId_idx" ON "sftp_readings"("userId");
+
+-- CreateIndex
+CREATE INDEX "sftp_readings_measuredAt_idx" ON "sftp_readings"("measuredAt");
+
+-- CreateIndex
+CREATE INDEX "sftp_readings_status_idx" ON "sftp_readings"("status");
+
+-- CreateIndex
+CREATE INDEX "sftp_readings_monitoringStationId_idx" ON "sftp_readings"("monitoringStationId");
+
+-- CreateIndex
+CREATE INDEX "sftp_readings_projectSiteId_idx" ON "sftp_readings"("projectSiteId");
+
+-- CreateIndex
+CREATE INDEX "sftp_readings_companyRecordId_idx" ON "sftp_readings"("companyRecordId");
+
+-- CreateIndex
+CREATE INDEX "sftp_readings_dataFileId_idx" ON "sftp_readings"("dataFileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "api_readings_referenceNo_key" ON "api_readings"("referenceNo");
+
+-- CreateIndex
+CREATE INDEX "api_readings_userId_idx" ON "api_readings"("userId");
+
+-- CreateIndex
+CREATE INDEX "api_readings_measuredAt_idx" ON "api_readings"("measuredAt");
+
+-- CreateIndex
+CREATE INDEX "api_readings_status_idx" ON "api_readings"("status");
+
+-- CreateIndex
+CREATE INDEX "api_readings_monitoringStationId_idx" ON "api_readings"("monitoringStationId");
+
+-- CreateIndex
+CREATE INDEX "api_readings_projectSiteId_idx" ON "api_readings"("projectSiteId");
+
+-- CreateIndex
+CREATE INDEX "api_readings_handshakeId_idx" ON "api_readings"("handshakeId");
+
+-- CreateIndex
 CREATE INDEX "attachments_reportId_idx" ON "attachments"("reportId");
+
+-- CreateIndex
+CREATE INDEX "attachments_sftpReadingId_idx" ON "attachments"("sftpReadingId");
+
+-- CreateIndex
+CREATE INDEX "attachments_apiReadingId_idx" ON "attachments"("apiReadingId");
 
 -- CreateIndex
 CREATE INDEX "audit_logs_userId_idx" ON "audit_logs"("userId");
@@ -454,13 +622,25 @@ CREATE INDEX "validation_requests_status_idx" ON "validation_requests"("status")
 CREATE INDEX "token_deliveries_handshakeId_idx" ON "token_deliveries"("handshakeId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "companies_companyId_key" ON "companies"("companyId");
+CREATE UNIQUE INDEX "nodes_name_key" ON "nodes"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "departments_name_key" ON "departments"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "companies_siteName_key" ON "companies"("siteName");
 
 -- CreateIndex
 CREATE INDEX "companies_architectId_idx" ON "companies"("architectId");
 
 -- CreateIndex
 CREATE INDEX "companies_userId_idx" ON "companies"("userId");
+
+-- CreateIndex
+CREATE INDEX "companies_departmentId_idx" ON "companies"("departmentId");
+
+-- CreateIndex
+CREATE INDEX "companies_nodeId_idx" ON "companies"("nodeId");
 
 -- CreateIndex
 CREATE INDEX "sftp_uploads_handshakeId_idx" ON "sftp_uploads"("handshakeId");
@@ -475,7 +655,7 @@ CREATE UNIQUE INDEX "data_files_uploadId_key" ON "data_files"("uploadId");
 CREATE INDEX "data_files_companyRecordId_idx" ON "data_files"("companyRecordId");
 
 -- CreateIndex
-CREATE INDEX "data_files_companyId_idx" ON "data_files"("companyId");
+CREATE INDEX "data_files_siteName_idx" ON "data_files"("siteName");
 
 -- CreateIndex
 CREATE INDEX "data_files_monthFolder_idx" ON "data_files"("monthFolder");
@@ -508,7 +688,34 @@ ALTER TABLE "reports" ADD CONSTRAINT "reports_projectId_fkey" FOREIGN KEY ("proj
 ALTER TABLE "reports" ADD CONSTRAINT "reports_companyRecordId_fkey" FOREIGN KEY ("companyRecordId") REFERENCES "companies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "sftp_readings" ADD CONSTRAINT "sftp_readings_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sftp_readings" ADD CONSTRAINT "sftp_readings_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sftp_readings" ADD CONSTRAINT "sftp_readings_companyRecordId_fkey" FOREIGN KEY ("companyRecordId") REFERENCES "companies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sftp_readings" ADD CONSTRAINT "sftp_readings_dataFileId_fkey" FOREIGN KEY ("dataFileId") REFERENCES "data_files"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "api_readings" ADD CONSTRAINT "api_readings_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "api_readings" ADD CONSTRAINT "api_readings_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "api_readings" ADD CONSTRAINT "api_readings_handshakeId_fkey" FOREIGN KEY ("handshakeId") REFERENCES "architect_handshakes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "reports"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attachments" ADD CONSTRAINT "attachments_sftpReadingId_fkey" FOREIGN KEY ("sftpReadingId") REFERENCES "sftp_readings"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attachments" ADD CONSTRAINT "attachments_apiReadingId_fkey" FOREIGN KEY ("apiReadingId") REFERENCES "api_readings"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "architect_handshakes" ADD CONSTRAINT "architect_handshakes_architectId_fkey" FOREIGN KEY ("architectId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -527,6 +734,12 @@ ALTER TABLE "token_deliveries" ADD CONSTRAINT "token_deliveries_handshakeId_fkey
 
 -- AddForeignKey
 ALTER TABLE "companies" ADD CONSTRAINT "companies_architectId_fkey" FOREIGN KEY ("architectId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "companies" ADD CONSTRAINT "companies_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "departments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "companies" ADD CONSTRAINT "companies_nodeId_fkey" FOREIGN KEY ("nodeId") REFERENCES "nodes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "sftp_uploads" ADD CONSTRAINT "sftp_uploads_handshakeId_fkey" FOREIGN KEY ("handshakeId") REFERENCES "architect_handshakes"("id") ON DELETE CASCADE ON UPDATE CASCADE;

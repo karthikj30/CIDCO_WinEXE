@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleError, ok } from '@/lib/api';
 import { requireArchitect } from '@/lib/guards';
+import { countReadings, findReadings } from '@/lib/readings';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,8 +119,8 @@ export async function GET(req: NextRequest) {
     });
 
     const [readingCount, recentReadings] = await Promise.all([
-      prisma.report.count({ where: { userId: me.id } }),
-      prisma.report.findMany({
+      countReadings({ userId: me.id }),
+      findReadings({
         where: { userId: me.id },
         orderBy: { receivedAt: 'desc' },
         take: 25,

@@ -21,7 +21,7 @@ const theirs = join(here, '..', '..', 'CIDCO_WEB', 'src', 'lib');
 const SHARED = [
   'api.ts', 'auth.ts', 'fetchJson.ts', 'guards.ts', 'handshake.ts',
   'logger.ts', 'prisma.ts', 'reports.ts', 'storage.ts', 'validation.ts',
-  'archWeb.ts',
+  'archWeb.ts', 'readings.ts',
 ];
 
 if (!existsSync(theirs)) {

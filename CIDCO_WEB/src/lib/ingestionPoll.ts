@@ -14,6 +14,7 @@ import {
   timestampFolderFor,
   validateColumns,
   validateRows,
+  validateTransfer,
 } from '@/lib/sftp';
 
 /**
@@ -223,6 +224,13 @@ export async function enqueueInboxFile(params: {
   const inboxPath = path.join(inboxRoot(), inboxName);
   await fs.writeFile(inboxPath, buffer);
 
+  const check = company
+    ? validateTransfer(company, {
+        siteName: parsed?.siteName ?? company.siteName,
+        filePath: presentedPath,
+      })
+    : null;
+
   const upload = await prisma.sftpUpload.create({
     data: {
       handshakeId,
@@ -232,8 +240,10 @@ export async function enqueueInboxFile(params: {
       mode,
       presentedSiteName: parsed?.siteName ?? company?.siteName ?? null,
       presentedPath,
-      siteNameMatch: Boolean(company && parsed && company.siteName === parsed.siteName),
-      pathMatch: !presentedPath || !company?.designatedPath,
+      // Compare what arrived against the registration with the same rules the
+      // officer's screen explains, rather than a second, looser copy of them.
+      siteNameMatch: check?.siteNameMatch ?? false,
+      pathMatch: check?.pathMatch ?? false,
       validationPassed: false,
       status: 'RECEIVED',
       rejectionReason: null,
@@ -615,6 +625,8 @@ export async function runPoll2(): Promise<{ processed: number; errors: string[] 
         companyRecordId: row.companyRecordId,
         rows: sheet.rows,
         deliveredFrom: { latitude: row.latitude, longitude: row.longitude },
+        dataFileId: row.id,
+        deliveredName: row.deliveredName,
       });
 
       if (outcome.importedCount === 0) {

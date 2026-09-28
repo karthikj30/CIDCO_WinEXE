@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { authenticate } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { fail, forbidden, handleError, ok, unauthorized } from '@/lib/api';
+import { findReadingAnywhere, readingDelegate } from '@/lib/readings';
 import { reviewSchema } from '@/lib/validation';
 import { logAudit } from '@/lib/reports';
 
@@ -19,10 +19,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const { status, reviewNote } = reviewSchema.parse(await req.json());
 
-    const existing = await prisma.report.findUnique({ where: { id } });
+    const existing = await findReadingAnywhere(id);
     if (!existing) return fail('Report not found', 404);
 
-    const report = await prisma.report.update({
+    const report = await readingDelegate(existing.channel).update({
       where: { id },
       data: {
         status,

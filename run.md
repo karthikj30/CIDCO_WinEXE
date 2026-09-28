@@ -509,7 +509,7 @@ psql -h localhost -U cidco_sftp -d cidco_sftp <<'SQL'
 SELECT "siteName", "architectName", active FROM companies ORDER BY 1;
 SELECT "pollStatus", COUNT(*) FROM data_files GROUP BY 1;   -- anything stuck?
 SELECT c."siteName", COUNT(r.id) AS readings
-FROM companies c LEFT JOIN reports r ON r."companyRecordId" = c.id
+FROM companies c LEFT JOIN sftp_readings r ON r."companyRecordId" = c.id
 GROUP BY 1 ORDER BY 2 DESC;
 SQL
 ```

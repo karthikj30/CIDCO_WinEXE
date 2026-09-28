@@ -9,17 +9,19 @@
  *   --  Every transfer is validated on the CIDCO side against the registration
  *       before anything is stored.
  *
+ * Ingestion itself is done by the two pollers, so this drives them in-process
+ * rather than needing them running alongside.
+ *
  * Needs both servers running:  npm start  and  npm run sftp
  */
 import { Client } from 'ssh2';
 import { prisma } from '../src/lib/prisma';
 import { buildCsvTemplate, SHEET_COLUMNS } from '../src/lib/sftp';
+import { runPoll1, runPoll2 } from '../src/lib/ingestionPoll';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const SFTP_HOST = '127.0.0.1';
 const SFTP_PORT = Number(process.env.SFTP_PORT || 2222);
-/** Everything here runs on one box for local e2e. */
-const ARCHITECT_IP = '127.0.0.1';
 const FILE_PATH = '/var/aqi/exports';
 
 const fails: string[] = [];
@@ -112,11 +114,11 @@ async function main() {
     body: JSON.stringify({
       siteName,
       designatedPath: FILE_PATH,
-      architectEmail: archEmail,
+      email: archEmail,
     }),
   });
   check(registered.status === 201, `company registered (got ${registered.status})`);
-  check(registered.json?.data?.company?.filePath === FILE_PATH, 'the file path is stored on the registration');
+  check(registered.json?.data?.company?.designatedPath === FILE_PATH, 'the designated path is stored on the registration');
   check(registered.json?.data?.company?.email === archEmail, 'the architect email is stored as contact detail');
   check(
     (await prisma.user.findUnique({ where: { email: archEmail } })) === null,
@@ -130,7 +132,7 @@ async function main() {
   });
   check(orphan.status === 404, 'credentials cannot be issued for an unregistered company');
 
-  console.log('== 1. CIDCO emails the user id, password and designated IP ==');
+  console.log('== 1. CIDCO emails the user id, password and designated path ==');
   const issued = await api('/api/admin/sftp/accounts', {
     method: 'POST',
     body: JSON.stringify({ siteName }),
@@ -138,10 +140,10 @@ async function main() {
   check(issued.status === 201, `credentials issued (got ${issued.status})`);
   const cred = issued.json.data.credential;
   check(
-    ['username', 'password', 'designatedIp', 'siteName', 'filePath'].every((k) => k in cred),
-    'the emailed bundle carries the user id, password, designated IP, site name and file path',
+    ['username', 'password', 'siteName', 'designatedPath'].every((k) => k in cred),
+    'the emailed bundle carries the user id, password, site name and designated path',
   );
-  console.log(`   ${cred.username} → ${cred.designatedIp}:${cred.port}${cred.filePath}`);
+  console.log(`   ${cred.username} → :${cred.port}${cred.designatedPath}`);
 
   console.log('== 2. the architect sends the CSV from the registered path ==');
   check((await connect(cred.username, 'wrong-password')) === null, 'a wrong password is refused');
@@ -151,33 +153,46 @@ async function main() {
   if (!conn) throw new Error('cannot continue without a session');
 
   const companyRow = await prisma.company.findUniqueOrThrow({ where: { siteName } });
-  const before = await prisma.report.count({ where: { companyRecordId: companyRow.id } });
+  const before = await prisma.sftpReading.count({ where: { companyRecordId: companyRow.id } });
 
-  await put(conn, `${FILE_PATH}/readings.csv`, csv(3));
+  // The agent names every transfer siteName_dd_mm_yyyy_hh-mm-ss_AQI.csv, and
+  // the ingestion service reads the site and the time straight out of it.
+  const now = new Date();
+  const two = (n: number) => String(n).padStart(2, '0');
+  const deliveredName =
+    `${siteName}_${two(now.getDate())}_${two(now.getMonth() + 1)}_${now.getFullYear()}_` +
+    `${two(now.getHours())}-${two(now.getMinutes())}-${two(now.getSeconds())}_AQI.csv`;
+  await put(conn, `${FILE_PATH}/${deliveredName}`, csv(3));
   conn.end();
-  await new Promise((r) => setTimeout(r, 3000)); // the server validates after acking the client
+  await new Promise((r) => setTimeout(r, 1500)); // the server acks the client, then queues the file
+
+  // The intake only queues; poll1 files the delivery and poll2 validates and
+  // stores it, so the run has to be driven before anything can be asserted.
+  await runPoll1();
+  await runPoll2();
 
   console.log('== validation on the CIDCO side ==');
   const list = await api('/api/admin/sftp/uploads');
   const row = list.json.data.uploads.find((u: { presentedSiteName: string | null }) => u.presentedSiteName === siteName);
   check(!!row, 'the transfer is on the CIDCO dashboard');
   check(row?.validationPassed === true, 'validation passed');
-  check(row?.siteNameMatch && row?.ipMatch && row?.pathMatch, 'site name, IP and file path all matched');
+  check(row?.siteNameMatch && row?.pathMatch, 'site name and file path both matched');
   check(row?.presentedPath === FILE_PATH, `the path it was taken from is recorded (${row?.presentedPath})`);
-  check(row?.presentedIp === ARCHITECT_IP, `the address it came from is recorded (${row?.presentedIp})`);
   check(row?.importedCount === 3 && row?.rowCount === 4, `3 of 4 CSV rows stored (got ${row?.importedCount} of ${row?.rowCount})`);
 
   const detail = await api(`/api/admin/sftp/uploads/${row.id}`);
   const v = detail.json.data.upload.validation;
   check(v.siteName.presented === siteName && v.siteName.expected === siteName, 'the officer sees site name, incoming vs registered');
-  check(v.ip.presented === ARCHITECT_IP && v.ip.expected === ARCHITECT_IP, 'the officer sees the IP, incoming vs registered');
-  check(v.filePath.presented === FILE_PATH && v.filePath.expected === FILE_PATH, 'the officer sees the file path, incoming vs registered');
+  check(
+    v.designatedPath.presented === FILE_PATH && v.designatedPath.expected === FILE_PATH,
+    'the officer sees the designated path, incoming vs registered',
+  );
   check(detail.json.data.upload.rows.length === 4, 'the CSV is previewable row by row');
 
-  const after = await prisma.report.count({ where: { companyRecordId: companyRow.id } });
+  const after = await prisma.sftpReading.count({ where: { companyRecordId: companyRow.id } });
   check(after - before === 3, `3 readings landed in the database (got ${after - before})`);
   check(
-    (await prisma.report.count({ where: { companyRecordId: companyRow.id, source: 'SFTP' } })) === 3,
+    (await prisma.sftpReading.count({ where: { companyRecordId: companyRow.id, source: 'SFTP' } })) === 3,
     'the readings are attributed to the registered company',
   );
 
@@ -196,7 +211,7 @@ async function main() {
   await new Promise((r) => setTimeout(r, 2500));
   check(refusedOnTheWire, 'the sender is told the transfer was refused');
 
-  const afterBad = await prisma.report.count({ where: { companyRecordId: companyRow.id } });
+  const afterBad = await prisma.sftpReading.count({ where: { companyRecordId: companyRow.id } });
   const rejected = await prisma.sftpUpload.findFirst({
     where: { handshake: { clientId: cred.username }, presentedPath: '/somewhere/else' },
     orderBy: { receivedAt: 'desc' },

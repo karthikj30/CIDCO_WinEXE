@@ -1,8 +1,7 @@
 import type { NextRequest } from 'next/server';
-import type { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
 import { handleError, ok } from '@/lib/api';
 import { requireCidco } from '@/lib/guards';
+import { channelsFor, countReadings, findReadings } from '@/lib/readings';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,8 +23,13 @@ export async function GET(req: NextRequest) {
     const source = url.searchParams.get('source');
     const search = url.searchParams.get('q')?.trim();
 
-    const where: Prisma.ReportWhereInput = {};
-    if (source) where.source = source as Prisma.ReportWhereInput['source'];
+    // A source filter narrows the query to that channel's table; without one
+    // the page is merged from all three.
+    // A source filter narrows the query to that channel's table, and to that
+    // one source within it — the manual table holds both WEB and CSV.
+    const channels = channelsFor(source);
+    const where: Record<string, unknown> = {};
+    if (source) where.source = source;
     if (search) {
       where.OR = [
         { referenceNo: { contains: search, mode: 'insensitive' } },
@@ -37,8 +41,8 @@ export async function GET(req: NextRequest) {
     }
 
     const [total, rows] = await Promise.all([
-      prisma.report.count({ where }),
-      prisma.report.findMany({
+      countReadings(where, channels),
+      findReadings({
         where,
         orderBy: { receivedAt: 'desc' },
         skip: (page - 1) * pageSize,
@@ -69,7 +73,7 @@ export async function GET(req: NextRequest) {
           receivedAt: true,
           user: { select: { name: true, email: true } },
         },
-      }),
+      }, channels),
     ]);
 
     return ok({

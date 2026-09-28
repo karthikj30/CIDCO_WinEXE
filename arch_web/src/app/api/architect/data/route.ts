@@ -116,6 +116,9 @@ export async function POST(req: NextRequest) {
         source: 'API',
         input,
         attachments,
+        handshakeId: handshake.id,
+        tokenPrefix: token.prefix,
+        sourceIp: ip,
       });
 
       await logComm({

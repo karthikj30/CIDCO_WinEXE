@@ -37,7 +37,7 @@ import SftpAccountsPanel from './admin/sftp/SftpAccountsPanel';
  */
 type Tab =
   | 'dashboard'
-  | 'transfers' | 'sftpData' | 'companies' | 'accounts'
+  | 'transfers' | 'sftpData' | 'sftpReadings' | 'companies' | 'accounts'
   | 'apiData' | 'handshakes' | 'validations' | 'requests' | 'comm';
 
 type AdminUser = { id: string; name: string; email: string; role: string };
@@ -141,6 +141,9 @@ export default function CidcoWorkspace({ landing = 'overview' }: { landing?: Lan
           <NavButton active={tab === 'sftpData'} onClick={() => setTab('sftpData')} icon={ICONS.folder}>
             Data
           </NavButton>
+          <NavButton active={tab === 'sftpReadings'} onClick={() => setTab('sftpReadings')} icon={ICONS.table}>
+            AQI readings
+          </NavButton>
           <NavButton active={tab === 'companies'} onClick={() => setTab('companies')} icon={ICONS.building}>
             Companies (master)
           </NavButton>
@@ -202,10 +205,11 @@ export default function CidcoWorkspace({ landing = 'overview' }: { landing?: Lan
 
             {tab === 'transfers' && <TransfersPanel />}
             {tab === 'sftpData' && <SftpDataPanel />}
+            {tab === 'sftpReadings' && <DataTablePanel defaultSource="SFTP" />}
             {tab === 'companies' && <SftpCompaniesPanel />}
             {tab === 'accounts' && <SftpAccountsPanel />}
 
-            {tab === 'apiData' && <DataTablePanel />}
+            {tab === 'apiData' && <DataTablePanel defaultSource="API" />}
             {tab === 'handshakes' && <HandshakesPanel />}
             {tab === 'validations' && <ValidationRequestsPanel />}
             {tab === 'requests' && <TokenRequestsPanel />}

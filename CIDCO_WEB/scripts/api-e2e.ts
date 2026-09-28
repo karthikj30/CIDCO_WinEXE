@@ -4,11 +4,17 @@
  * delivered to the architect's dashboard -> the architect creates their own
  * login -> a reading is sent with the access token.
  *
- * Needs the web server running:  npm start
+ * The two halves now run as two apps, so this drives both: the officer side
+ * on the CIDCO portal, the architect side on the architect portal.
+ *
+ * Needs both running:  npm start (CIDCO_WEB)  and  npm start (arch_web)
  */
 import { prisma } from '../src/lib/prisma';
 
+/** The CIDCO officer portal. */
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
+/** The architect's API portal, on its own port. */
+const ARCH_BASE = process.env.ARCH_BASE_URL || 'http://localhost:3001';
 
 const fails: string[] = [];
 const check = (ok: boolean, label: string) => {
@@ -17,10 +23,10 @@ const check = (ok: boolean, label: string) => {
 };
 
 /** Each jar is one browser: officers and architects hold separate cookies. */
-function jar() {
+function jar(base = BASE) {
   let cookie = '';
   return async (path: string, init: RequestInit = {}) => {
-    const res = await fetch(BASE + path, {
+    const res = await fetch(base + path, {
       ...init,
       headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) },
     });
@@ -33,7 +39,7 @@ function jar() {
 async function main() {
   const stamp = Date.now();
   const officer = jar();
-  const architect = jar();
+  const architect = jar(ARCH_BASE);
 
   console.log('== 1. CIDCO issues credentials ==');
   const login = await officer('/api/auth/login', {
@@ -134,7 +140,7 @@ async function main() {
   );
 
   console.log('== 5. the architect sends a reading ==');
-  const sent = await fetch(`${BASE}/api/architect/data`, {
+  const sent = await fetch(`${ARCH_BASE}/api/architect/data`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${delivery!.accessToken}` },
     body: JSON.stringify({
@@ -152,6 +158,21 @@ async function main() {
     }),
   });
   check(sent.status === 201, `reading stored (got ${sent.status})`);
+
+  // The API channel has a table of its own; a reading posted here must land
+  // there and nowhere else.
+  const stored = await prisma.apiReading.findFirst({
+    where: { projectSiteId: 'CIDCO-API-E2E' },
+    orderBy: { receivedAt: 'desc' },
+  });
+  check(Boolean(stored), 'the reading is in api_readings');
+  check(stored?.referenceNo.startsWith('CIDCO/AQI/API/') ?? false,
+    `its reference number is an API one (${stored?.referenceNo})`);
+  check(Boolean(stored?.handshakeId), 'it records the handshake that carried it');
+  check(
+    (await prisma.report.count({ where: { projectSiteId: 'CIDCO-API-E2E' } })) === 0,
+    'and nothing of it was written to reports',
+  );
 
   console.log('== 6. the two channels stay apart ==');
   const sftpAccounts = await officer('/api/admin/sftp/accounts');

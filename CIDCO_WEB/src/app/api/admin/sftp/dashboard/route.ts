@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
 
     // --- the readings, and the deliveries that carried them ---------------
     const [readings, files] = await Promise.all([
-      prisma.report.findMany({
+      prisma.sftpReading.findMany({
         where: {
           companyRecordId: { in: ids },
           measuredAt: { gte: since },

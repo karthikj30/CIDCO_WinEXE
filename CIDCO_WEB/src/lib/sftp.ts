@@ -428,8 +428,13 @@ export async function importRows(params: {
    * them, since that is the station speaking rather than the PC that sent it.
    */
   deliveredFrom?: { latitude: number | null; longitude: number | null };
+  /** The delivered file these rows were parsed out of, so a stored reading
+   *  can be traced back to the transfer that carried it. */
+  dataFileId?: string | null;
+  /** The flat name the agent sent, kept alongside the link for the same reason. */
+  deliveredName?: string | null;
 }): Promise<ImportOutcome> {
-  const { architectId, companyRecordId, rows, deliveredFrom } = params;
+  const { architectId, companyRecordId, rows, deliveredFrom, dataFileId, deliveredName } = params;
   const errors: Array<{ row: number; error: string }> = [];
   let importedCount = 0;
 
@@ -443,7 +448,14 @@ export async function importRows(params: {
         latitude: parsed.latitude ?? deliveredFrom?.latitude ?? null,
         longitude: parsed.longitude ?? deliveredFrom?.longitude ?? null,
       };
-      await createReport({ userId: architectId, source: 'SFTP', input, companyRecordId });
+      await createReport({
+        userId: architectId,
+        source: 'SFTP',
+        input,
+        companyRecordId,
+        dataFileId,
+        deliveredName,
+      });
       importedCount++;
     } catch (error) {
       errors.push({ row: sheetRow, error: describeError(error) });

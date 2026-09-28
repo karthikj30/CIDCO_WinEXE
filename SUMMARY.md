@@ -106,7 +106,8 @@ all take **the same path** into the database.
 | `validation.ts` | zod schemas for reports and registration. | upload paths |
 | `sftp.ts` | The channel's core: storage folders, the sheet shape, `validateColumns`, `validateRows`, `importRows`, the shared login. | SFTP server, HTTP transfer, poll2 |
 | `ingestionPoll.ts` | The two polls and the ten ingestion steps. `parseAqiFileName`, `runPoll1`, `runPoll2`, `ingestionHealth`. | poll worker, poll API, Data tab |
-| `reports.ts` | `createReport()` — the single write path into `reports`. | `importRows`, API channel |
+| `reports.ts` | `createReport()` — the single write path; `source` decides which reading table it lands in. | `importRows`, API channel |
+| `readings.ts` | The three reading tables as one: `readingDelegate`, `channelsFor`, `findReadings`, `countReadings`, `aggregateAqi`. | admin data table, stats, report routes |
 | `aqi.ts` | CPCB bands, the two colour scales, `metresBetween`, `checkLocation`, `reportingStatus`. | dashboard API, charts, map |
 | `aqiRows.ts` | Turns stored `aqiData` JSON back into readable rows, including rejected ones. | readings table, analytics |
 | `portalAccount.ts` | The shared architect login used by every agent. | transfer route, SFTP server |
@@ -203,7 +204,7 @@ Ten steps, each recorded on the row so an officer can see exactly where a file s
 5. Validate Project/Site  10. Move file  → storage/archive/…
 ```
 
-Valid rows become `reports` rows through `createReport()`. Invalid rows are kept in the
+Valid rows become `sftp_readings` rows through `createReport()`. Invalid rows are kept in the
 `data_files.aqiData` JSON so the officer can see what was rejected and why. A reading with no
 coordinates of its own inherits the file's.
 
@@ -243,13 +244,22 @@ The connection string lives in `CIDCO_WEB/.env` as `DATABASE_URL`. Note: `?schem
 | `nodes` | `Node` | Pushpak, Dronagiri, Kharghar, Karanjade, Taloja, Ulwe. |
 | `departments` | `Department` | Planning NAINA, Planning Navi Mumbai, Engineering Department. |
 | `data_files` | `DataFile` | **One row per delivered file**, its ingestion status and its rejected rows. |
-| `reports` | `Report` | **One row per reading.** This is what the dashboard charts. |
+| `sftp_readings` | `SftpReading` | **One row per reading delivered over SFTP.** This is what the dashboard charts. |
+| `api_readings` | `ApiReading` | One row per reading posted to the REST API. |
+| `reports` | `Report` | One row per reading CIDCO took in by hand — the web form and CSV uploads. |
 | `sftp_uploads` | `SftpUpload` | The raw arrival record, before filing. |
 | `users` | `User` | Officers and architects. |
 | `architect_handshakes` | `ArchitectHandshake` | Issued SFTP credentials. |
 
-`companies.id` → `data_files.companyRecordId` → and `reports.companyRecordId`. Delete a company
-and its files cascade; its readings have the link set to null rather than being destroyed.
+`companies.id` → `data_files.companyRecordId` → and `sftp_readings.companyRecordId`. Delete a
+company and its files cascade; its readings have the link set to null rather than being destroyed.
+
+**Readings are stored per channel.** The three tables carry the same reading columns, so a query
+written against one works against the others — only the provenance differs: `sftp_readings` knows
+the site and the delivered file, `api_readings` knows the handshake and the token, `reports` knows
+the attachments that came with the form. Reference numbers carry the channel too, so the three
+sequences can never collide: `CIDCO/AQI/SFTP/2026/00001`, `CIDCO/AQI/API/2026/00001`,
+`CIDCO/AQI/2026/00001`.
 
 ### Looking at data
 
@@ -266,7 +276,7 @@ FROM companies ORDER BY "siteName";
 
 -- how many readings per site
 SELECT c."siteName", COUNT(r.id) AS readings, ROUND(AVG(r."aqiValue")) AS avg_aqi
-FROM companies c LEFT JOIN reports r ON r."companyRecordId" = c.id
+FROM companies c LEFT JOIN sftp_readings r ON r."companyRecordId" = c.id
 GROUP BY c."siteName" ORDER BY readings DESC;
 
 -- the last ten deliveries and how they went
@@ -283,11 +293,22 @@ SELECT "pollStatus", COUNT(*) FROM data_files GROUP BY 1;
 
 -- the newest readings, named by the site that sent them
 SELECT c."siteName", r."measuredAt", r."aqiValue", r.pm25, r.pm10, r.no2
-FROM reports r JOIN companies c ON c.id = r."companyRecordId"
+FROM sftp_readings r JOIN companies c ON c.id = r."companyRecordId"
 ORDER BY r."measuredAt" DESC LIMIT 20;
+
+-- every channel at once, newest first
+SELECT 'SFTP' AS channel, "referenceNo", "siteName", "measuredAt", "aqiValue" FROM sftp_readings
+UNION ALL SELECT 'API', "referenceNo", "siteName", "measuredAt", "aqiValue" FROM api_readings
+UNION ALL SELECT 'MANUAL', "referenceNo", "siteName", "measuredAt", "aqiValue" FROM reports
+ORDER BY "measuredAt" DESC LIMIT 20;
+
+-- how much each channel has taken in
+SELECT 'sftp_readings' AS t, COUNT(*) FROM sftp_readings
+UNION ALL SELECT 'api_readings', COUNT(*) FROM api_readings
+UNION ALL SELECT 'reports', COUNT(*) FROM reports;
 ```
 
-**A trap worth knowing:** `reports."siteName"` is *not* the company site name — it is whatever
+**A trap worth knowing:** `sftp_readings."siteName"` is *not* the company site name — it is whatever
 the CSV's "Project / Site ID" column said, so it comes out as `PRJ-002` or `CIDCO-ULW-008`. The
 authoritative site name is `companies."siteName"`, reached through `companyRecordId`, which is
 why the query above joins. `data_files."siteName"` *is* the company name, copied there so the
@@ -338,14 +359,14 @@ UI does not show.
 
 ```sql
 BEGIN;                                   -- open a transaction
-SELECT COUNT(*) FROM reports WHERE "measuredAt" < NOW() - INTERVAL '2 years';
-DELETE FROM reports WHERE "measuredAt" < NOW() - INTERVAL '2 years';
+SELECT COUNT(*) FROM sftp_readings WHERE "measuredAt" < NOW() - INTERVAL '2 years';
+DELETE FROM sftp_readings WHERE "measuredAt" < NOW() - INTERVAL '2 years';
 -- COMMIT;   ← only when the count was what you expected
 ROLLBACK;                                -- otherwise this undoes it
 ```
 
 Deleting a company deletes its `data_files` rows with it (`ON DELETE CASCADE`), and sets
-`reports.companyRecordId` to null rather than removing the readings. Files on disk are **not**
+`sftp_readings.companyRecordId` to null rather than removing the readings. Files on disk are **not**
 touched by any of this — clear `storage/cidco-data` and `storage/archive` by hand if you mean to.
 
 ```sql

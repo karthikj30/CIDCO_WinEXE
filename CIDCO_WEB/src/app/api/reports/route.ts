@@ -1,8 +1,7 @@
 import type { NextRequest } from 'next/server';
-import type { Prisma } from '@prisma/client';
 import { authenticate } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { fail, handleError, ok, unauthorized } from '@/lib/api';
+import { channelsFor, countReadings, findReadings } from '@/lib/readings';
 import { reportSchema } from '@/lib/validation';
 import { createReport, logAudit, type PendingAttachment } from '@/lib/reports';
 import {
@@ -127,10 +126,11 @@ export async function GET(req: NextRequest) {
     const source = url.searchParams.get('source');
     const search = url.searchParams.get('q');
 
-    const where: Prisma.ReportWhereInput = {};
+    const channels = channelsFor(source);
+    const where: Record<string, unknown> = {};
     if (auth.user.role === 'ARCHITECT') where.userId = auth.user.id;
-    if (status) where.status = status as Prisma.ReportWhereInput['status'];
-    if (source) where.source = source as Prisma.ReportWhereInput['source'];
+    if (status) where.status = status;
+    if (source) where.source = source;
     if (search) {
       where.OR = [
         { siteName: { contains: search, mode: 'insensitive' } },
@@ -140,8 +140,8 @@ export async function GET(req: NextRequest) {
     }
 
     const [total, reports] = await Promise.all([
-      prisma.report.count({ where }),
-      prisma.report.findMany({
+      countReadings(where, channels),
+      findReadings({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
@@ -150,7 +150,7 @@ export async function GET(req: NextRequest) {
           attachments: { select: { id: true, kind: true, fileName: true, sizeBytes: true } },
           user: { select: { id: true, name: true, email: true, firmName: true } },
         },
-      }),
+      }, channels),
     ]);
 
     return ok({ page, pageSize, total, totalPages: Math.ceil(total / pageSize) || 1, reports });

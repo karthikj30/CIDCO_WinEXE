@@ -43,14 +43,19 @@ const AQI_COLOR = (a: number) =>
     : a <= 400 ? 'bg-red-100 text-red-800'
     : 'bg-rose-200 text-rose-900';
 
-export default function DataTablePanel() {
+/**
+ * The live reading table. Readings are stored per channel — sftp_readings,
+ * api_readings and reports — so the panel opens on whichever table the tab it
+ * sits under is about, and the source picker widens it from there.
+ */
+export default function DataTablePanel({ defaultSource = '' }: { defaultSource?: string }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [q, setQ] = useState('');
-  const [source, setSource] = useState('');
+  const [source, setSource] = useState(defaultSource);
   const [live, setLive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +108,11 @@ export default function DataTablePanel() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">AQI Data (PostgreSQL)</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Live view of the <code className="rounded bg-slate-100 px-1 text-xs">reports</code> table — every reading fed in by architects.
+            Live view of{' '}
+            <code className="rounded bg-slate-100 px-1 text-xs">
+              {source === 'SFTP' ? 'sftp_readings' : source === 'API' ? 'api_readings' : source ? 'reports' : 'sftp_readings + api_readings + reports'}
+            </code>{' '}
+            — every reading fed in by architects.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -126,10 +135,11 @@ export default function DataTablePanel() {
           className="min-w-56 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cidco-500 focus:ring-1 focus:ring-cidco-500"
         />
         <select value={source} onChange={(e) => { setPage(1); setSource(e.target.value); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
-          <option value="">All sources</option>
-          <option value="API">API</option>
-          <option value="CSV">CSV</option>
-          <option value="WEB">WEB</option>
+          <option value="">All channels</option>
+          <option value="SFTP">SFTP (sftp_readings)</option>
+          <option value="API">API (api_readings)</option>
+          <option value="CSV">CSV (reports)</option>
+          <option value="WEB">WEB (reports)</option>
         </select>
         <select value={pageSize} onChange={(e) => { setPage(1); setPageSize(Number(e.target.value)); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
           {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}

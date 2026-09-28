@@ -83,28 +83,30 @@ enum TokenRequestStatus {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         Role     @default(ARCHITECT)
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String
+  name           String
+  role           Role      @default(ARCHITECT)
   // Architect-specific profile fields, optional for CIDCO officers.
-  firmName     String?
-  councilRegNo String?
-  phone        String?
+  firmName       String?
+  councilRegNo   String?
+  phone          String?
   // Architect-chosen extras captured when they set up their own login.
-  designation  String?
-  address      String?
+  designation    String?
+  address        String?
   // Set when the architect creates their own username/password after CIDCO
   // approves their validation. Null means the placeholder login still stands.
   accountSetupAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  apiKeys    ApiKey[]
-  reports    Report[]
-  handshakes ArchitectHandshake[] @relation("ArchitectHandshakes")
-  companies  Company[]            @relation("CompanyArchitect")
+  apiKeys      ApiKey[]
+  reports      Report[]
+  sftpReadings SftpReading[]
+  apiReadings  ApiReading[]
+  handshakes   ArchitectHandshake[] @relation("ArchitectHandshakes")
+  companies    Company[]            @relation("CompanyArchitect")
 
   @@map("users")
 }
@@ -134,32 +136,36 @@ model Project {
   plotNumber String?
   createdAt  DateTime @default(now())
 
-  reports Report[]
+  reports      Report[]
+  sftpReadings SftpReading[]
+  apiReadings  ApiReading[]
 
   @@map("projects")
 }
 
+/// Readings CIDCO received by hand — the web form and CSV uploads. The two
+/// automated channels have tables of their own (sftp_readings, api_readings).
 model Report {
-  id            String       @id @default(cuid())
-  referenceNo   String       @unique
-  userId        String
-  projectId     String?
-  source        ReportSource
-  status        ReportStatus @default(SUBMITTED)
+  id          String       @id @default(cuid())
+  referenceNo String       @unique
+  userId      String
+  projectId   String?
+  source      ReportSource
+  status      ReportStatus @default(SUBMITTED)
 
-  siteName      String
-  location      String
-  latitude      Float?
-  longitude     Float?
-  measuredAt    DateTime // Date & Time of Reading
-  aqiValue      Int
-  pm25          Float?
-  pm10          Float?
-  so2           Float?
-  no2           Float?
-  co            Float?
-  ozone         Float? // O3
-  remarks       String?
+  siteName   String
+  location   String
+  latitude   Float?
+  longitude  Float?
+  measuredAt DateTime // Date & Time of Reading
+  aqiValue   Int
+  pm25       Float?
+  pm10       Float?
+  so2        Float?
+  no2        Float?
+  co         Float?
+  ozone      Float? // O3
+  remarks    String?
 
   // Station / device provenance for automated AQI monitoring feeds.
   projectSiteId       String? // Project / Site ID
@@ -174,12 +180,12 @@ model Report {
   otherParams         Json? // Other applicable environmental parameters
   receivedAt          DateTime @default(now()) // Data Receipt Timestamp (when CIDCO stored it)
 
-  reviewedBy    String?
-  reviewNote    String?
-  reviewedAt    DateTime?
+  reviewedBy String?
+  reviewNote String?
+  reviewedAt DateTime?
 
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   project     Project?     @relation(fields: [projectId], references: [id])
@@ -195,19 +201,160 @@ model Report {
   @@map("reports")
 }
 
-model Attachment {
-  id         String         @id @default(cuid())
-  reportId   String
-  kind       AttachmentKind
-  fileName   String
-  storedName String
-  mimeType   String
-  sizeBytes  Int
-  createdAt  DateTime       @default(now())
+/// Everything the architect's Windows agent delivers over SFTP lands here.
+///
+/// The SFTP and API channels are stored apart on purpose: the two flows have
+/// different provenance (a delivered file and a registered site on one side,
+/// a handshake and a bearer token on the other), and keeping them in separate
+/// tables means an officer looking at one channel is never reading the other's
+/// rows by accident.
+model SftpReading {
+  id          String       @id @default(cuid())
+  referenceNo String       @unique
+  userId      String
+  projectId   String?
+  source      ReportSource @default(SFTP)
+  status      ReportStatus @default(SUBMITTED)
 
-  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  siteName   String
+  location   String
+  latitude   Float?
+  longitude  Float?
+  measuredAt DateTime
+  aqiValue   Int
+  pm25       Float?
+  pm10       Float?
+  so2        Float?
+  no2        Float?
+  co         Float?
+  ozone      Float?
+  remarks    String?
+
+  projectSiteId       String?
+  monitoringStationId String?
+  oem                 String?
+  deviceModel         String?
+  temperature         Float?
+  humidity            Float?
+  integrationMethod   String?
+  otherParams         Json?
+  receivedAt          DateTime @default(now())
+
+  reviewedBy String?
+  reviewNote String?
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- SFTP provenance ----------------------------------------------------
+  /// The registered site (master table) whose agent sent this reading.
+  companyRecordId String?
+  /// The delivered file this row was parsed out of.
+  dataFileId      String?
+  /// The flat name the agent sent, kept so a row can be traced to its file
+  /// even after the file record is pruned.
+  deliveredName   String?
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project?     @relation(fields: [projectId], references: [id])
+  company     Company?     @relation(fields: [companyRecordId], references: [id], onDelete: SetNull)
+  dataFile    DataFile?    @relation(fields: [dataFileId], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@index([userId])
+  @@index([measuredAt])
+  @@index([status])
+  @@index([monitoringStationId])
+  @@index([projectSiteId])
+  @@index([companyRecordId])
+  @@index([dataFileId])
+  @@map("sftp_readings")
+}
+
+/// Everything an architect posts to the CIDCO REST API lands here.
+model ApiReading {
+  id          String       @id @default(cuid())
+  referenceNo String       @unique
+  userId      String
+  projectId   String?
+  source      ReportSource @default(API)
+  status      ReportStatus @default(SUBMITTED)
+
+  siteName   String
+  location   String
+  latitude   Float?
+  longitude  Float?
+  measuredAt DateTime
+  aqiValue   Int
+  pm25       Float?
+  pm10       Float?
+  so2        Float?
+  no2        Float?
+  co         Float?
+  ozone      Float?
+  remarks    String?
+
+  projectSiteId       String?
+  monitoringStationId String?
+  oem                 String?
+  deviceModel         String?
+  temperature         Float?
+  humidity            Float?
+  integrationMethod   String?
+  otherParams         Json?
+  receivedAt          DateTime @default(now())
+
+  reviewedBy String?
+  reviewNote String?
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- API provenance -----------------------------------------------------
+  /// The established handshake whose token carried this reading.
+  handshakeId String?
+  /// The first characters of the bearer token used, for tracing.
+  tokenPrefix String?
+  /// Where the call came from.
+  sourceIp    String?
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project?            @relation(fields: [projectId], references: [id])
+  handshake   ArchitectHandshake? @relation(fields: [handshakeId], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@index([userId])
+  @@index([measuredAt])
+  @@index([status])
+  @@index([monitoringStationId])
+  @@index([projectSiteId])
+  @@index([handshakeId])
+  @@map("api_readings")
+}
+
+model Attachment {
+  id            String         @id @default(cuid())
+  /// An attachment belongs to exactly one reading, in exactly one of the three
+  /// reading tables. Which pointer is set says which channel carried it.
+  reportId      String?
+  sftpReadingId String?
+  apiReadingId  String?
+  kind          AttachmentKind
+  fileName      String
+  storedName    String
+  mimeType      String
+  sizeBytes     Int
+  createdAt     DateTime       @default(now())
+
+  report      Report?      @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sftpReading SftpReading? @relation(fields: [sftpReadingId], references: [id], onDelete: Cascade)
+  apiReading  ApiReading?  @relation(fields: [apiReadingId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
+  @@index([sftpReadingId])
+  @@index([apiReadingId])
   @@map("attachments")
 }
 
@@ -244,42 +391,42 @@ model ApiRequestLog {
 /// clientId + secret to validate (POST /api/architect/validate); once that
 /// succeeds the handshake becomes ESTABLISHED and the 2-way channel is open.
 model ArchitectHandshake {
-  id                  String          @id @default(cuid())
-  architectId         String
+  id                   String          @id @default(cuid())
+  architectId          String
   // Which delivery channel this handshake is for. An architect can hold one of
   // each; the credentials, dashboards and flows are kept entirely separate.
-  channel             TransferChannel @default(API)
+  channel              TransferChannel @default(API)
   // SFTP credentials are always issued against a company CIDCO registered
   // first — that record is what every transfer is validated against.
-  companyRecordId     String?
+  companyRecordId      String?
   // The "userid" half of the credential the admin hands over. Public-ish.
-  clientId            String          @unique
+  clientId             String          @unique
   // Only the hash of the "password" half is stored; plaintext shown once.
-  secretHash          String
-  secretPrefix        String
+  secretHash           String
+  secretPrefix         String
   // Expiry date of the credential, set by the admin (point 2 of the spec).
-  credentialExpiresAt DateTime
-  status              HandshakeStatus @default(PENDING)
+  credentialExpiresAt  DateTime
+  status               HandshakeStatus @default(PENDING)
   architectValidatedAt DateTime?
-  establishedAt       DateTime?
-  lastValidatedIp     String?
-  createdById         String?
-  revokedAt           DateTime?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  establishedAt        DateTime?
+  lastValidatedIp      String?
+  createdById          String?
+  revokedAt            DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   // --- IP / device whitelist (CASE 1) --------------------------------------
   // Captured at the architect's first successful validate and enforced on
   // every later call, so only the registered machine can use the tokens.
-  whitelistedIp       String?
-  deviceInfo          String?
-  deviceFingerprint   String? // sha256(deviceInfo), for constant-time compare
-  whitelistedAt       DateTime?
-  enforceWhitelist    Boolean         @default(true)
+  whitelistedIp     String?
+  deviceInfo        String?
+  deviceFingerprint String? // sha256(deviceInfo), for constant-time compare
+  whitelistedAt     DateTime?
+  enforceWhitelist  Boolean   @default(true)
 
   // --- Token expiry policy, editable by the admin from the dashboard -------
-  accessTokenTtlDays  Int             @default(7)
-  refreshTokenTtlDays Int             @default(30)
+  accessTokenTtlDays  Int @default(7)
+  refreshTokenTtlDays Int @default(30)
 
   architect          User                @relation("ArchitectHandshakes", fields: [architectId], references: [id], onDelete: Cascade)
   tokens             IntegrationToken[]
@@ -288,6 +435,7 @@ model ArchitectHandshake {
   validationRequests ValidationRequest[]
   deliveries         TokenDelivery[]
   sftpUploads        SftpUpload[]
+  apiReadings        ApiReading[]
   company            Company?            @relation(fields: [companyRecordId], references: [id], onDelete: SetNull)
 
   @@index([architectId])
@@ -299,19 +447,19 @@ model ArchitectHandshake {
 /// sends AQI data to POST /api/architect/data with this token. Tokens expire
 /// (default 7 days) which is why architects can raise renewal requests.
 model IntegrationToken {
-  id            String    @id @default(cuid())
-  handshakeId   String
-  tokenHash     String    @unique
-  prefix        String
-  expiresAt     DateTime
+  id                 String    @id @default(cuid())
+  handshakeId        String
+  tokenHash          String    @unique
+  prefix             String
+  expiresAt          DateTime
   refreshTokenHash   String?   @unique
   refreshTokenPrefix String?
   refreshExpiresAt   DateTime?
-  revokedAt     DateTime?
-  lastUsedAt    DateTime?
-  createdById   String?
-  fromRequestId String?   @unique
-  createdAt     DateTime  @default(now())
+  revokedAt          DateTime?
+  lastUsedAt         DateTime?
+  createdById        String?
+  fromRequestId      String?   @unique
+  createdAt          DateTime  @default(now())
 
   handshake ArchitectHandshake @relation(fields: [handshakeId], references: [id], onDelete: Cascade)
 
@@ -329,11 +477,11 @@ model ValidationRequest {
   channel      TransferChannel @default(API)
   presentedIp  String?
   deviceInfo   String?
-  status       ApprovalStatus @default(PENDING)
+  status       ApprovalStatus  @default(PENDING)
   reviewedById String?
   reviewedAt   DateTime?
   reviewNote   String?
-  createdAt    DateTime       @default(now())
+  createdAt    DateTime        @default(now())
 
   handshake ArchitectHandshake @relation(fields: [handshakeId], references: [id], onDelete: Cascade)
 
@@ -388,10 +536,10 @@ enum TransferMode {
 /// Its own table rather than a string on the company, so the list is
 /// consistent between sites and an officer can add one without a deploy.
 model Node {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
+  id        String   @id @default(cuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   companies Company[]
 
@@ -400,10 +548,10 @@ model Node {
 
 /// A CIDCO department — Planning (NAINA), Planning (Navi Mumbai), Engineering.
 model Department {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
+  id        String   @id @default(cuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   companies Company[]
 
@@ -419,21 +567,21 @@ model Department {
 /// Registering is optional: poll1 creates a row from the name in the first
 /// file that arrives. Registering adds everything else.
 model Company {
-  id                String   @id @default(cuid())
+  id             String  @id @default(cuid())
   /// The site, e.g. "Kharghar Sector 12". Unique, and quoted on every transfer.
-  siteName          String   @unique
+  siteName       String  @unique
   /// Master-table credentials CIDCO issues for this site.
-  publicKey         String?
-  privateKey        String?
+  publicKey      String?
+  privateKey     String?
   /// Portal / SFTP user id tied to this site.
-  userId            String?
+  userId         String?
   /// The designated path the architect's agent delivers to.
-  designatedPath    String   @default("")
-  mobile            String?
-  email             String?
-  address           String?
+  designatedPath String  @default("")
+  mobile         String?
+  email          String?
+  address        String?
   /// The architect responsible for the site.
-  architectName     String?
+  architectName  String?
 
   /// Where CIDCO says this site is. The agent reports where each file was
   /// actually sent from; the monitoring map compares the two.
@@ -441,26 +589,27 @@ model Company {
   registeredLongitude   Float?
   /// How far a delivery may be from the registered point before the map
   /// calls it a mismatch.
-  permittedRadiusMetres Int      @default(500)
+  permittedRadiusMetres Int    @default(500)
 
-  departmentId      String?
-  nodeId            String?
+  departmentId String?
+  nodeId       String?
 
   /// Optional link to a portal user, kept for registrations made before the
   /// shared login existed. Nothing requires it.
-  architectId       String?
-  notes             String?
-  active            Boolean  @default(true)
-  createdById       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  architectId String?
+  notes       String?
+  active      Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  architect  User?                @relation("CompanyArchitect", fields: [architectId], references: [id], onDelete: SetNull)
-  department Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  node       Node?                @relation(fields: [nodeId], references: [id], onDelete: SetNull)
-  handshakes ArchitectHandshake[]
-  reports    Report[]
-  dataFiles  DataFile[]
+  architect    User?                @relation("CompanyArchitect", fields: [architectId], references: [id], onDelete: SetNull)
+  department   Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  node         Node?                @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  handshakes   ArchitectHandshake[]
+  reports      Report[]
+  sftpReadings SftpReading[]
+  dataFiles    DataFile[]
 
   @@index([architectId])
   @@index([userId])
@@ -473,33 +622,33 @@ model Company {
 /// and a preview of the sheet so a CIDCO officer can look at exactly what was
 /// delivered before, and after, it became readings.
 model SftpUpload {
-  id            String           @id @default(cuid())
-  handshakeId   String
-  fileName      String
-  storedName    String // file name on CIDCO's disk
-  sizeBytes     Int
-  status        SftpUploadStatus @default(RECEIVED)
-  mode          TransferMode     @default(DIRECT_SFTP)
+  id          String           @id @default(cuid())
+  handshakeId String
+  fileName    String
+  storedName  String // file name on CIDCO's disk
+  sizeBytes   Int
+  status      SftpUploadStatus @default(RECEIVED)
+  mode        TransferMode     @default(DIRECT_SFTP)
 
   // --- CIDCO-side validation, run on every single transfer -----------------
   // What the transfer presented…
-  presentedSiteName  String?
-  presentedPath      String?
+  presentedSiteName String?
+  presentedPath     String?
   // …and whether each matched the company record CIDCO registered beforehand.
-  siteNameMatch      Boolean @default(false)
-  pathMatch          Boolean @default(false)
-  validationPassed   Boolean @default(false)
-  rejectionReason    String?
+  siteNameMatch     Boolean   @default(false)
+  pathMatch         Boolean   @default(false)
+  validationPassed  Boolean   @default(false)
+  rejectionReason   String?
   // Parse outcome.
-  sheetName     String?
-  columns       Json? // header row, as read from the sheet
-  rows          Json? // the sheet's rows, for the dashboard preview
-  rowCount      Int              @default(0)
-  importedCount Int              @default(0)
-  failedCount   Int              @default(0)
-  errors        Json? // per-row rejection reasons
-  receivedAt    DateTime         @default(now())
-  parsedAt      DateTime?
+  sheetName         String?
+  columns           Json? // header row, as read from the sheet
+  rows              Json? // the sheet's rows, for the dashboard preview
+  rowCount          Int       @default(0)
+  importedCount     Int       @default(0)
+  failedCount       Int       @default(0)
+  errors            Json? // per-row rejection reasons
+  receivedAt        DateTime  @default(now())
+  parsedAt          DateTime?
 
   handshake ArchitectHandshake @relation(fields: [handshakeId], references: [id], onDelete: Cascade)
 
@@ -525,14 +674,14 @@ enum DataFilePollStatus {
 /// the AQI payload, and the AQI SFTP Ingestion Service file status.
 /// `companies` is the matching MASTER table (siteName, publicKey, privateKey, userId).
 model DataFile {
-  id              String            @id @default(cuid())
+  id              String             @id @default(cuid())
   companyRecordId String
   /// Denormalised so the folder tree can be read without a join.
   siteName        String
   /// e.g. "2026-09-September"
   monthFolder     String
   /// e.g. "2026-09-18"
-  dateFolder      String            @default("pending")
+  dateFolder      String             @default("pending")
   /// e.g. "2026-09-18_11-30-05"
   timestampFolder String
   /// Timestamp parsed from the filename (siteName_timestamp_AQI.csv).
@@ -550,17 +699,18 @@ model DataFile {
   latitude        Float?
   longitude       Float?
   sizeBytes       Int
-  rowCount        Int               @default(0)
-  importedCount   Int               @default(0)
-  uploadId        String?           @unique
+  rowCount        Int                @default(0)
+  importedCount   Int                @default(0)
+  uploadId        String?            @unique
   /// Parsed AQI rows (JSON) after poll2 stores them.
   aqiData         Json?
   /// AQI SFTP Ingestion Service steps 1–10 (OK / FAILED detail), or CORRECT.
-  fileStatus      String?           @db.Text
+  fileStatus      String?            @db.Text
   pollStatus      DataFilePollStatus @default(INBOX)
-  receivedAt      DateTime          @default(now())
+  receivedAt      DateTime           @default(now())
 
-  company Company @relation(fields: [companyRecordId], references: [id], onDelete: Cascade)
+  company  Company       @relation(fields: [companyRecordId], references: [id], onDelete: Cascade)
+  readings SftpReading[]
 
   @@index([companyRecordId])
   @@index([siteName])
@@ -572,19 +722,19 @@ model DataFile {
 /// An architect's request for a fresh token (typically after expiry). The
 /// admin fulfils it by generating a new token.
 model TokenRequest {
-  id            String             @id @default(cuid())
-  handshakeId   String
-  reason        String?
-  status        TokenRequestStatus @default(PENDING)
-  kind          TokenRequestKind   @default(ACCESS_RENEWAL)
+  id               String             @id @default(cuid())
+  handshakeId      String
+  reason           String?
+  status           TokenRequestStatus @default(PENDING)
+  kind             TokenRequestKind   @default(ACCESS_RENEWAL)
   // Hash of the refresh token the architect presented, so CIDCO can verify it
   // at approval time without ever storing the plaintext.
   refreshTokenHash String?
-  requestedIp   String?
-  resolvedById  String?
-  issuedTokenId String?
-  requestedAt   DateTime           @default(now())
-  resolvedAt    DateTime?
+  requestedIp      String?
+  resolvedById     String?
+  issuedTokenId    String?
+  requestedAt      DateTime           @default(now())
+  resolvedAt       DateTime?
 
   handshake ArchitectHandshake @relation(fields: [handshakeId], references: [id], onDelete: Cascade)
 
