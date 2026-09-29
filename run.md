@@ -571,6 +571,21 @@ done
 npx prisma migrate deploy      # "No pending migrations to apply."
 ```
 
+If it stops with **P3018** and **"… already exists"** (for example
+`column "apiReadingId" of relation "attachments" already exists`), part of the
+new schema was put in some other way — `prisma db push`, or running
+`full_schema.sql` — before the migration got to it. The migrations are written
+to cope with that, so mark the failed one as not applied and run again. The
+name is the one in the error:
+
+```bash
+npx prisma migrate resolve --rolled-back 20261005100000_split_channel_readings
+npx prisma migrate deploy
+```
+
+Avoid `npm run db:push` on the server: it changes tables without recording a
+migration, which is what leads here.
+
 ### If the portal is still empty
 
 | What you see | What it means |
