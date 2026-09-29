@@ -136,10 +136,11 @@ exactly two files care — `RemotePath.cs` on the agent side, `ingestionPoll.ts`
 install. `SetupFlow.cs` holds the decisions with no window attached, which is why the wizard's
 rules are covered by tests. The answers land in a local SQLite file via `Settings.cs`.
 
-The location step opens **blank** with a **Detect location** button. Detect reads the position
-from the PC — Windows Location Service first, then a lookup from the public IP — fills the boxes
-and says which source answered, so a rough network fix is not mistaken for a precise one. The
-step will not pass until something is in it.
+The location step **detects the position by itself as it opens** — Windows Location Service
+first (Wi-Fi positioning, or GPS where the PC has it), then a lookup from the public IP — fills
+the boxes and says which source answered, so a rough network fix is not mistaken for a precise
+one. **Detect again** retries after Windows Location is switched on; the architect can correct
+the numbers by hand. The step will not pass empty.
 
 It used to open pre-filled with Navi Mumbai, and an architect anywhere else clicked straight
 past it: the registered position became a city they had never visited, and because that value
@@ -147,16 +148,18 @@ is also the last fallback at send time, every file claimed Kharghar. A blank fie
 question; a filled one answers it wrongly.
 
 The position recorded here is the **registered** one — the point CIDCO measures each delivery
-against on the map, and the fallback used only when nothing can measure where the PC is now.
+against on the map. It is **never** stamped on a sent file: that would let a file sent from
+anywhere pass the location check.
 
 ### Step 2 — Send (every few hours, automatically)
 
 ```
 ExportPicker.cs   picks the newest .csv in the folder, skips one already sent
-StationLocation.cs resolves where the PC is NOW:
+StationLocation.cs resolves where the PC is NOW, fresh on every send:
                      1. Windows Location Service   (GPS / Wi-Fi)
                      2. public-IP lookup           (rough, but real)
-                     3. the position from install  (last resort)
+                     neither answers → the file goes WITHOUT a position,
+                     and CIDCO shows it as "no live position sent"
 RemotePath.cs     builds the name
 CidcoSender.cs    sends over SFTP   ─┐
 PortalSender.cs   sends over HTTP   ─┴→ CIDCO
@@ -210,11 +213,18 @@ coordinates of its own inherits the file's.
 
 ### Step 6 — The officer looks
 
-`/cidco/sftp` → `SftpPortalWorkspace.tsx`, five tabs:
+An officer who signs in at `/` goes **straight to the dashboard** at `/cidco` — there is no
+channel to choose. The dashboard reads **both** `sftp_readings` and `api_readings`, by site,
+with a *SFTP + API / SFTP only / API only* filter. API readings reach a site through the
+handshake's linked site (API channel → Architect handshakes → Site); readings from a handshake
+that is not linked yet show as `API · <architect>` so nothing is missing from the charts.
+
+`/cidco` → `CidcoWorkspace.tsx`. The SFTP tabs:
 
 | Tab | Component | Reads |
 |---|---|---|
-| Monitoring dashboard | `DashboardPanel.tsx` + `AmCharts.tsx` + `SiteMap.tsx` | `GET /api/admin/sftp/dashboard` |
+| Dashboard (SFTP + API) | `DashboardPanel.tsx` + `AmCharts.tsx` + `SiteMap.tsx` | `GET /api/admin/dashboard` |
+| AQI readings (SFTP) / AQI data (API) | `DataTablePanel.tsx` | `…/admin/reports?source=SFTP` / `?source=API` — one table each |
 | Delivered transfers | `TransfersPanel.tsx` | `…/analytics` |
 | Data | `SftpDataPanel.tsx` | `…/data`, `…/data/rows` |
 | Companies (master) | `SftpCompaniesPanel.tsx` | `…/companies`, `…/lookups` |
@@ -619,7 +629,7 @@ dotnet test tests/Cidco.Core.Tests/Cidco.Core.Tests.csproj    # 270 tests
 | The ten ingestion steps | `lib/ingestionPoll.ts` | `INGESTION_STEPS` is rendered verbatim on the Data tab |
 | Accepted CSV columns | `lib/sftp.ts` — `SHEET_COLUMNS` | `lib/aqiRows.ts` for the readings table |
 | A table or column | `prisma/schema.prisma` | `npx prisma migrate dev`, never raw SQL |
-| A chart | `components/admin/sftp/AmCharts.tsx` | `api/admin/sftp/dashboard/route.ts` for the data |
+| A chart | `components/admin/sftp/AmCharts.tsx` | `api/admin/dashboard/route.ts` for the data |
 | AQI bands or colours | `lib/aqi.ts` | nothing — every chart and the map read it from there |
 | What an officer may do | `lib/guards.ts` | one place, deliberately |
 

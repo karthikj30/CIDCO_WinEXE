@@ -16,6 +16,8 @@ type Handshake = {
   tokenCount: number;
   tokenRequestCount: number;
   activeToken: { prefix: string; expiresAt: string } | null;
+  /** The master-table site this integration reports for, if linked. */
+  site: { id: string; siteName: string } | null;
   createdAt: string;
 };
 
@@ -31,8 +33,19 @@ export default function HandshakesPanel() {
   // create form
   const [architectEmail, setArchitectEmail] = useState('architect@example.com');
   const [expiresInDays, setExpiresInDays] = useState('30');
+  const [siteName, setSiteName] = useState('');
   const [creating, setCreating] = useState(false);
   const [credential, setCredential] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // The master table's sites, for linking an integration to one.
+  const [sites, setSites] = useState<string[]>([]);
+  useEffect(() => {
+    fetch('/api/admin/sftp/companies')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setSites((j?.data?.companies ?? []).map((c: { siteName: string }) => c.siteName)))
+      .catch(() => {});
+  }, []);
 
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -64,7 +77,11 @@ export default function HandshakesPanel() {
       const res = await fetch('/api/admin/handshakes', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ architectEmail, expiresInDays: Number(expiresInDays) }),
+        body: JSON.stringify({
+          architectEmail,
+          expiresInDays: Number(expiresInDays),
+          siteName: siteName || undefined,
+        }),
       });
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? 'Failed to issue credentials');
@@ -74,6 +91,24 @@ export default function HandshakesPanel() {
       setError((err as Error).message);
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function linkSite(h: Handshake, next: string) {
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/admin/handshakes/${h.id}/site`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ siteName: next || null }),
+      });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(json.error ?? 'Could not link the site');
+      setNotice(json.data.message);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -88,6 +123,7 @@ export default function HandshakesPanel() {
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
+      {notice && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
 
       {/* Issue new credentials */}
       <form onSubmit={create} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -114,6 +150,18 @@ export default function HandshakesPanel() {
               onChange={(e) => setExpiresInDays(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cidco-500 focus:ring-1 focus:ring-cidco-500"
             />
+          </div>
+          <div className="w-56">
+            <label htmlFor="hs-site" className="mb-1 block text-sm font-medium text-slate-700">Site (master table)</label>
+            <select
+              id="hs-site"
+              value={siteName}
+              onChange={(e) => setSiteName(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+            >
+              <option value="">Not linked yet</option>
+              {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
           <button
             type="submit"
@@ -142,6 +190,7 @@ export default function HandshakesPanel() {
               <tr>
                 <th className="px-5 py-3 font-medium">Client ID</th>
                 <th className="px-5 py-3 font-medium">Architect</th>
+                <th className="px-5 py-3 font-medium">Site</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Active token</th>
                 <th className="px-5 py-3 font-medium">Credential expiry</th>
@@ -150,9 +199,9 @@ export default function HandshakesPanel() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading && rows.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">Loading…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">No handshakes yet. Issue one above.</td></tr>
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">No handshakes yet. Issue one above.</td></tr>
               ) : (
                 rows.map((h) => (
                   <Fragment key={h.id}>
@@ -161,6 +210,19 @@ export default function HandshakesPanel() {
                       <td className="px-5 py-3">
                         <p className="font-medium text-slate-900">{h.architect.name}</p>
                         <p className="text-xs text-slate-500">{h.architect.email}</p>
+                      </td>
+                      <td className="px-5 py-3">
+                        {/* Linking a site puts this integration's readings on the dashboard's map. */}
+                        <select
+                          value={h.site?.siteName ?? ''}
+                          onChange={(e) => void linkSite(h, e.target.value)}
+                          className={`max-w-44 rounded-md border px-2 py-1 text-xs ${
+                            h.site ? 'border-slate-300 bg-white text-slate-800' : 'border-amber-300 bg-amber-50 text-amber-800'
+                          }`}
+                        >
+                          <option value="">Not linked</option>
+                          {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
                       </td>
                       <td className="px-5 py-3"><StatusBadge status={h.status} /></td>
                       <td className="px-5 py-3 text-xs text-slate-600">
@@ -182,7 +244,7 @@ export default function HandshakesPanel() {
                     </tr>
                     {openId === h.id && (
                       <tr>
-                        <td colSpan={6} className="bg-slate-50 px-5 py-4">
+                        <td colSpan={7} className="bg-slate-50 px-5 py-4">
                           <HandshakeDetail handshakeId={h.id} clientId={h.clientId} onChanged={load} />
                         </td>
                       </tr>

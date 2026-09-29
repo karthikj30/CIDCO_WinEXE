@@ -59,9 +59,19 @@ async function main() {
     body: JSON.stringify({ email: 'officer@cidco.example', password: 'Password123' }),
   });
 
+  // The integration reports for a registered site, so its readings land on
+  // that site's map marker and charts beside its SFTP deliveries.
+  const site = await prisma.company.create({
+    data: {
+      siteName: `API-E2E-SITE-${stamp}`,
+      designatedPath: '',
+      registeredLatitude: 19.0237,
+      registeredLongitude: 73.0402,
+    },
+  });
   const issued = await officer('/api/admin/handshakes', {
     method: 'POST',
-    body: JSON.stringify({ architectEmail: placeholderEmail, expiresInDays: 30 }),
+    body: JSON.stringify({ architectEmail: placeholderEmail, expiresInDays: 30, siteName: site.siteName }),
   });
   check(issued.status === 201, 'credentials issued');
   const cred = issued.json.data.credential;
@@ -169,6 +179,19 @@ async function main() {
   check(stored?.referenceNo.startsWith('CIDCO/AQI/API/') ?? false,
     `its reference number is an API one (${stored?.referenceNo})`);
   check(Boolean(stored?.handshakeId), 'it records the handshake that carried it');
+  check(stored?.companyRecordId === site.id, 'it is attributed to the site the handshake is linked to');
+
+  const dash = await officer(`/api/admin/dashboard?hours=${24 * 365}&channel=API&site=${encodeURIComponent(site.siteName)}`);
+  const onDash = dash.json?.data?.sites?.find((s: { siteName: string }) => s.siteName === site.siteName);
+  check(onDash?.readingCount === 1 && onDash?.channels?.includes('API'),
+    `the dashboard shows it under that site (got ${onDash?.readingCount ?? 'nothing'})`);
+  check(dash.json?.data?.totals?.apiReadings === 1, 'and counts it as an API reading');
+
+  const apiTable = await officer('/api/admin/reports?source=API&pageSize=200');
+  check(
+    apiTable.json?.data?.rows?.every((r: { source: string }) => r.source === 'API'),
+    'the API data table holds API readings only',
+  );
   check(
     (await prisma.report.count({ where: { projectSiteId: 'CIDCO-API-E2E' } })) === 0,
     'and nothing of it was written to reports',

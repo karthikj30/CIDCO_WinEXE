@@ -45,6 +45,12 @@ export type MapSite = {
   reporting: ReportingKey;
   lastDeliveryAt: string | null;
   lastDeliveredName: string | null;
+  /** Which channel carried the latest delivery. */
+  lastDeliveryChannel?: 'SFTP' | 'API' | null;
+  /** The channels this site's readings in the window came through. */
+  channels?: Array<'SFTP' | 'API'>;
+  /** False for API readings whose handshake is not linked to a registered site. */
+  linked?: boolean;
   readingCount: number;
 };
 
@@ -296,7 +302,9 @@ function Detail({ site }: { site: MapSite }) {
       </p>
 
       {site.lastDeliveredName && (
-        <p className="mt-2 break-all font-mono text-[10px] text-slate-400">{site.lastDeliveredName}</p>
+        <p className="mt-2 break-all font-mono text-[10px] text-slate-400">
+          {site.lastDeliveryChannel ? `${site.lastDeliveryChannel} · ` : ''}{site.lastDeliveredName}
+        </p>
       )}
     </div>
   );

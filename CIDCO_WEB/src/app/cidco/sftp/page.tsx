@@ -23,7 +23,7 @@ export default function CidcoSftpPortalPage() {
         title="CIDCO"
         subtitle="AQI Compliance Portal"
         accent="violet"
-        links={[{ href: '/', label: 'Switch channel' }]}
+        links={[{ href: '/docs/architect', label: 'API docs' }, { href: '/docs/sftp', label: 'SFTP docs' }]}
       />
       <CidcoWorkspace landing="sftp" />
     </div>

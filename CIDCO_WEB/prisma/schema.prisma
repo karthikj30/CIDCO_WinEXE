@@ -314,15 +314,19 @@ model ApiReading {
 
   // --- API provenance -----------------------------------------------------
   /// The established handshake whose token carried this reading.
-  handshakeId String?
+  handshakeId     String?
   /// The first characters of the bearer token used, for tracing.
-  tokenPrefix String?
+  tokenPrefix     String?
   /// Where the call came from.
-  sourceIp    String?
+  sourceIp        String?
+  /// The registered site (master table) the handshake is linked to, copied
+  /// on arrival so the dashboard reads both channels the same way.
+  companyRecordId String?
 
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   project     Project?            @relation(fields: [projectId], references: [id])
   handshake   ArchitectHandshake? @relation(fields: [handshakeId], references: [id], onDelete: SetNull)
+  company     Company?            @relation(fields: [companyRecordId], references: [id], onDelete: SetNull)
   attachments Attachment[]
 
   @@index([userId])
@@ -331,6 +335,7 @@ model ApiReading {
   @@index([monitoringStationId])
   @@index([projectSiteId])
   @@index([handshakeId])
+  @@index([companyRecordId])
   @@map("api_readings")
 }
 
@@ -609,6 +614,7 @@ model Company {
   handshakes   ArchitectHandshake[]
   reports      Report[]
   sftpReadings SftpReading[]
+  apiReadings  ApiReading[]
   dataFiles    DataFile[]
 
   @@index([architectId])

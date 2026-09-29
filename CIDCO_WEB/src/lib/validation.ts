@@ -196,6 +196,8 @@ export const createHandshakeSchema = z
       .refine((d) => d === undefined || !Number.isNaN(d.getTime()), 'expiryDate must be a valid date'),
     expiresInDays: z.coerce.number().int().positive().max(3650).optional(),
     note: z.string().max(200).optional(),
+    /** The registered site (master table) this integration reports for. */
+    siteName: z.string().trim().min(1).optional(),
   })
   .refine((v) => v.architectId || v.architectEmail, {
     message: 'Provide architectId or architectEmail',

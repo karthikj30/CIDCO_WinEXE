@@ -173,8 +173,20 @@ export default function Gateway() {
     setForm({ email: '', password: '', name: '', firmName: '', councilRegNo: '', phone: '', signupCode: '' });
   }
 
-  if (checking) {
-    return <div className="flex flex-1 items-center justify-center text-sm text-slate-500">Loading…</div>;
+  // An officer has nothing to choose: both channels share one desk, and it
+  // opens on the charts. Straight there, whether they just signed in, just
+  // signed up, or came back with a session already open.
+  const officer = user && user.role !== 'ARCHITECT';
+  useEffect(() => {
+    if (officer) window.location.replace('/cidco');
+  }, [officer]);
+
+  if (checking || officer) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+        {officer ? 'Opening the dashboard…' : 'Loading…'}
+      </div>
+    );
   }
 
   // --- Signed in: choose the channel ---------------------------------------

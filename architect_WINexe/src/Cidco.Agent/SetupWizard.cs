@@ -342,8 +342,8 @@ internal sealed class SetupWizard : Form
     {
         var y = Heading(
             "Where is this station?",
-            "Detect reads the position from this PC. Check it, correct it if the site sits a little "
-            + "away, and it is locked after install \u2014 every file carries it.");
+            "Read from this PC\u2019s location (Wi-Fi, or the internet connection) as this step opens. "
+            + "It becomes the site\u2019s registered position; every send then stamps where the PC is at that moment.");
 
         var boxes = new TextBox[2];
         var titles = new[] { "Latitude", "Longitude" };
@@ -394,40 +394,63 @@ internal sealed class SetupWizard : Form
             Location = new Point(24, y + 50),
             Size = new Size(136, 26),
         };
-        detect.Click += async (_, _) =>
+        // Detection runs by itself when the step opens, so nobody has to know
+        // to press anything; the button is there to try again after turning
+        // Windows Location on.
+        async Task RunDetect(bool automatic)
         {
             detect.Enabled = false;
             detect.Text = "Detecting\u2026";
-            SetStatus("");
+            // Held locally: the field is replaced when the wizard moves to
+            // another step, and a late answer must only touch this step.
+            var status = _status!;
+            status.ForeColor = Theme.Faint;
+            status.Text = "Reading this PC\u2019s location\u2026";
 
             // Off the UI thread: Windows Location can take a couple of seconds
             // the first time, and the network lookup has its own timeout.
             var (fix, note) = await Task.Run(DetectLocation);
 
-            if (fix.HasPosition)
+            // The architect may have moved on, or typed their own numbers in
+            // while this ran. Neither should be overwritten by a late answer.
+            if (detect.IsDisposed) return;
+            var typedMeanwhile = automatic && (boxes[0].Text.Length > 0 || boxes[1].Text.Length > 0);
+
+            if (fix.HasPosition && !typedMeanwhile)
             {
                 _flow.Latitude = fix.Latitude;
                 _flow.Longitude = fix.Longitude;
                 boxes[0].Text = fix.Latitude;
                 boxes[1].Text = fix.Longitude;
-                _status!.ForeColor = Theme.Faint;
-                _status.Text = $"From {fix.Describe}. {note}";
+                status.ForeColor = Theme.Faint;
+                status.Text = $"From {fix.Describe}. {note}";
+            }
+            else if (!fix.HasPosition)
+            {
+                status.ForeColor = Theme.Bad;
+                status.Text = note;
             }
             else
             {
-                _status!.ForeColor = Theme.Bad;
-                _status.Text = note;
+                status.Text = "";
             }
 
             detect.Enabled = true;
-            detect.Text = "Detect location";
-        };
+            detect.Text = "Detect again";
+        }
+
+        detect.Click += async (_, _) => await RunDetect(automatic: false);
         _body.Controls.Add(detect);
+
+        if (_flow.Latitude.Length == 0 && _flow.Longitude.Length == 0)
+        {
+            _ = RunDetect(automatic: true);
+        }
 
         _body.Controls.Add(new Label
         {
-            Text = "Decimal degrees. Embedded in the file name on every send, and compared against "
-                 + "the position CIDCO registered for this site.",
+            Text = "Decimal degrees. Correct them if the site sits a little away from this PC. "
+                 + "CIDCO compares every file\u2019s live position against this one.",
             ForeColor = Theme.Faint,
             Font = Theme.Small,
             Location = new Point(24, y + 132),

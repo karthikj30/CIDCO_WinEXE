@@ -119,6 +119,9 @@ export async function POST(req: NextRequest) {
         handshakeId: handshake.id,
         tokenPrefix: token.prefix,
         sourceIp: ip,
+        // The site CIDCO linked this integration to, so the reading lands on
+        // the same map and charts as that site's SFTP deliveries.
+        companyRecordId: handshake.companyRecordId,
       });
 
       await logComm({

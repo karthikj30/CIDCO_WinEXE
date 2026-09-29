@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: {
         architect: { select: { id: true, name: true, email: true, firmName: true } },
+        company: { select: { id: true, siteName: true } },
         tokens: { orderBy: { createdAt: 'desc' } },
         _count: { select: { tokenRequests: true } },
       },
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
         credentialExpiresAt: h.credentialExpiresAt,
         establishedAt: h.establishedAt,
         architect: h.architect,
+        site: h.company,
         whitelistedIp: h.whitelistedIp,
         enforceWhitelist: h.enforceWhitelist,
         accessTokenTtlDays: h.accessTokenTtlDays,
@@ -99,6 +101,13 @@ export async function POST(req: NextRequest) {
       return fail('Credential expiry must be in the future', 422);
     }
 
+    // Linking a site is what puts this integration's readings on the
+    // dashboard's map and charts alongside that site's SFTP deliveries.
+    const company = data.siteName
+      ? await prisma.company.findUnique({ where: { siteName: data.siteName } })
+      : null;
+    if (data.siteName && !company) return fail(`No site "${data.siteName}" in the master table`, 404);
+
     const clientId = generateClientId();
     const { secret, secretHash, secretPrefix } = generateSecret();
 
@@ -106,6 +115,7 @@ export async function POST(req: NextRequest) {
       data: {
         architectId: architect.id,
         channel: 'API',
+        companyRecordId: company?.id ?? null,
         clientId,
         secretHash,
         secretPrefix,

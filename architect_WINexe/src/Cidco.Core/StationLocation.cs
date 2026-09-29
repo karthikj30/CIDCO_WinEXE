@@ -14,7 +14,7 @@ public enum LocationOrigin
     /// <summary>Looked up from the public IP. A district, not a doorstep.</summary>
     Network,
 
-    /// <summary>The position typed in while installing. A last resort.</summary>
+    /// <summary>The position typed in while installing. Never stamped on a send.</summary>
     Registered,
 }
 
@@ -64,8 +64,10 @@ public interface ILocationSource
 /// from there should have the file say where it was actually sent from, which
 /// is the whole point of CIDCO holding the coordinates at all.
 ///
-/// Sources are tried in order of how much they know — the device first, a
-/// network lookup next, and the registered position last. A send is never
+/// Sources are tried in order of how much they know — the device first, then
+/// a network lookup. The agent does not add the registered position to the
+/// chain: a file stamped with it would pass CIDCO's location check from
+/// anywhere, which is exactly what the check exists to catch. A send is never
 /// blocked by any of them: each gets a short timeout, and a transfer with no
 /// position is better than a transfer that did not happen.
 ///

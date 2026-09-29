@@ -47,7 +47,8 @@ export async function createReport(params: {
   userId: string;
   source: ReportSource;
   input: ReportInput;
-  /** The registered company that delivered this reading (SFTP channel). */
+  /** The registered site this reading belongs to — the SFTP account's site,
+   *  or the site an API handshake is linked to. */
   companyRecordId?: string | null;
   /** The delivered file this row was parsed out of (SFTP channel). */
   dataFileId?: string | null;
@@ -107,7 +108,7 @@ export async function createReport(params: {
       channel === 'SFTP'
         ? { companyRecordId, dataFileId, deliveredName }
         : channel === 'API'
-          ? { handshakeId, tokenPrefix, sourceIp }
+          ? { handshakeId, tokenPrefix, sourceIp, companyRecordId }
           : {};
 
     return readingDelegate(channel).create({

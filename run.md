@@ -436,6 +436,15 @@ As pm2 processes: comment out `cidco-poll` in `ecosystem.config.js`, uncomment
 
 ### Looking at PostgreSQL
 
+**The whole picture on one page:** [`postgres-guide.png`](postgres-guide.png) maps
+every table — MASTER, SFTP, API, manual — how they join, and eight tested
+queries. The same queries as a file you can run in one go:
+
+```bash
+cd ~/CIDCO_WinEXE
+psql -h localhost -U cidco_sftp -d cidco_sftp -P pager=off -f postgres-guide.sql
+```
+
 **On the server**, straight in:
 
 ```bash

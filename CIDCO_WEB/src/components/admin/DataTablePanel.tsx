@@ -44,18 +44,19 @@ const AQI_COLOR = (a: number) =>
     : 'bg-rose-200 text-rose-900';
 
 /**
- * The live reading table. Readings are stored per channel — sftp_readings,
- * api_readings and reports — so the panel opens on whichever table the tab it
- * sits under is about, and the source picker widens it from there.
+ * The live reading table for one channel. Readings are stored per channel, so
+ * the SFTP tab reads sftp_readings and the API tab reads api_readings — and
+ * neither can be widened into the other, which is how SFTP rows used to turn
+ * up under the API channel.
  */
-export default function DataTablePanel({ defaultSource = '' }: { defaultSource?: string }) {
+export default function DataTablePanel({ channel }: { channel: 'SFTP' | 'API' }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [q, setQ] = useState('');
-  const [source, setSource] = useState(defaultSource);
+  const source = channel;
   const [live, setLive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,20 +100,22 @@ export default function DataTablePanel({ defaultSource = '' }: { defaultSource?:
   const COLS = [
     'Reference', 'Received', 'Measured', 'Project/Site', 'Station', 'OEM / Model',
     'AQI', 'PM2.5', 'PM10', 'NO₂', 'SO₂', 'CO', 'O₃', 'Temp °C', 'Humidity %',
-    'Source', 'Integration', 'Status',
+    // No Source or Integration column: the table is one channel's, so both
+    // would say the same thing on every row.
+    'Status',
   ];
 
   return (
     <div className="w-full space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">AQI Data (PostgreSQL)</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">{channel} AQI readings</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Live view of{' '}
-            <code className="rounded bg-slate-100 px-1 text-xs">
-              {source === 'SFTP' ? 'sftp_readings' : source === 'API' ? 'api_readings' : source ? 'reports' : 'sftp_readings + api_readings + reports'}
-            </code>{' '}
-            — every reading fed in by architects.
+            Live view of the{' '}
+            <code className="rounded bg-slate-100 px-1 text-xs">{channel === 'SFTP' ? 'sftp_readings' : 'api_readings'}</code>{' '}
+            table — {channel === 'SFTP'
+              ? 'every reading the Windows agent delivered over SFTP.'
+              : 'every reading architects\u2019 stations posted to the CIDCO API.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -134,13 +137,6 @@ export default function DataTablePanel({ defaultSource = '' }: { defaultSource?:
           placeholder="Search reference, site, station…"
           className="min-w-56 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cidco-500 focus:ring-1 focus:ring-cidco-500"
         />
-        <select value={source} onChange={(e) => { setPage(1); setSource(e.target.value); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
-          <option value="">All channels</option>
-          <option value="SFTP">SFTP (sftp_readings)</option>
-          <option value="API">API (api_readings)</option>
-          <option value="CSV">CSV (reports)</option>
-          <option value="WEB">WEB (reports)</option>
-        </select>
         <select value={pageSize} onChange={(e) => { setPage(1); setPageSize(Number(e.target.value)); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
           {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
         </select>
@@ -186,8 +182,6 @@ export default function DataTablePanel({ defaultSource = '' }: { defaultSource?:
                     <td className="px-3 py-2 text-slate-600">{num(r.ozone)}</td>
                     <td className="px-3 py-2 text-slate-600">{num(r.temperature)}</td>
                     <td className="px-3 py-2 text-slate-600">{num(r.humidity)}</td>
-                    <td className="px-3 py-2 text-slate-600">{r.source}</td>
-                    <td className="px-3 py-2 text-slate-500">{txt(r.integrationMethod)}</td>
                     <td className="px-3 py-2">
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{r.status}</span>
                     </td>

@@ -31,9 +31,15 @@ internal sealed class AgentWindow : Form
     private readonly TextBox _password = new();
     private readonly TextBox _site = new();
     /// <summary>
-    /// Where the PC is, asked afresh for each transfer. Windows Location
-    /// Service first, then a lookup from the public IP, and the position typed
-    /// in at install only if neither answers.
+    /// Where the PC is, asked afresh for each transfer: Windows Location
+    /// Service first (Wi-Fi, or GPS where the PC has it), then a lookup from
+    /// the public IP.
+    ///
+    /// The position typed in at install is deliberately NOT a fallback. CIDCO
+    /// uses the stamped position to check a file really came from the site; a
+    /// file stamped with the install position when nothing could measure where
+    /// the PC is now would pass that check from anywhere. No live position
+    /// means the file goes without one, and CIDCO sees it as unverified.
     /// </summary>
     private readonly LiveLocation _location;
 
@@ -68,7 +74,6 @@ internal sealed class AgentWindow : Form
         // anything older the network lookup is the best there is.
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) sources.Add(new WindowsLocationSource());
         sources.Add(new NetworkLocationSource());
-        sources.Add(new RegisteredLocationSource(() => (_settings.Latitude, _settings.Longitude)));
         _location = new LiveLocation(sources);
 
         Text = "CIDCO AQI Agent 1.0 — SFTP file transfer";
@@ -118,30 +123,17 @@ internal sealed class AgentWindow : Form
         {
             _latitude.Text = fix.Latitude;
             _longitude.Text = fix.Longitude;
-
-            // Falling back to the install-time position means nothing could
-            // measure where this PC is now — so every file is being stamped
-            // with where it was set up, wherever it has since been taken. That
-            // is worth saying loudly rather than in the same grey as a real fix.
-            if (fix.Origin == LocationOrigin.Registered)
-            {
-                _locationNote.ForeColor = Theme.Bad;
-                _locationNote.Text = "install position \u2014 live location unavailable";
-            }
-            else
-            {
-                _locationNote.ForeColor = Theme.Faint;
-                _locationNote.Text = $"from {fix.Describe}";
-            }
+            _locationNote.ForeColor = Theme.Faint;
+            _locationNote.Text = $"live, from {fix.Describe}";
             return;
         }
 
         // Nothing could say where this is. The file still goes; it just goes
-        // without a position, and saying so here is better than showing a
-        // stale number that is no longer true.
+        // without a position — CIDCO marks it unverified — and saying so here
+        // is better than showing a stale number that is no longer true.
         _latitude.Text = "unavailable";
         _longitude.Text = "unavailable";
-        _locationNote.Text = "turn on location for desktop apps in Windows Settings";
+        _locationNote.Text = "no live position \u2014 files go unverified";
         _locationNote.ForeColor = Theme.Bad;
     }
 
@@ -379,7 +371,6 @@ internal sealed class AgentWindow : Form
         _username.Text = _settings.UsernameOrDefault;
         _site.Text = _settings.SiteNameOrDefault;
         // Filled by RefreshLocationAsync, which reads where the PC is now.
-        // The registered position is only a fallback inside that resolver.
         ShowLocation(_location.Last);
         _folder.Text = _settings.CsvFolder;
         _keyPath.Text = _settings.PrivateKeyPath;

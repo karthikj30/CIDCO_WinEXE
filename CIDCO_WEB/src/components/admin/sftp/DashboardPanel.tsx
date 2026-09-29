@@ -30,6 +30,7 @@ type Dashboard = {
   totals: {
     sites: number; reporting: number; delayed: number; silent: number;
     highAqi: number; locationMismatch: number; readings: number;
+    sftpReadings: number; apiReadings: number; unlinkedApiSites: number;
     averageAqi: number | null; peakAqi: number | null;
   };
   sites: MapSite[];
@@ -78,6 +79,7 @@ export default function DashboardPanel() {
 
   // --- filters, shared by every panel below ------------------------------
   const [hours, setHours] = useState<number>(24);
+  const [channel, setChannel] = useState('');
   const [node, setNode] = useState('');
   const [department, setDepartment] = useState('');
   const [site, setSite] = useState('');
@@ -97,6 +99,7 @@ export default function DashboardPanel() {
 
   const query = useMemo(() => {
     const p = new URLSearchParams({ hours: String(hours) });
+    if (channel) p.set('channel', channel);
     if (node) p.set('node', node);
     if (department) p.set('department', department);
     if (site) p.set('site', site);
@@ -105,11 +108,11 @@ export default function DashboardPanel() {
     if (band) p.set('band', band);
     if (status) p.set('status', status);
     return p.toString();
-  }, [hours, node, department, site, contractor, station, band, status]);
+  }, [hours, channel, node, department, site, contractor, station, band, status]);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/admin/sftp/dashboard?${query}`);
+      const res = await fetch(`/api/admin/dashboard?${query}`);
       const json = await readJson(res);
       if (!res.ok) throw new Error(json.error ?? 'Could not load the dashboard');
       setData(json.data);
@@ -143,14 +146,15 @@ export default function DashboardPanel() {
     let dropped = false;
     (async () => {
       const p = new URLSearchParams({ hours: String(hours), site: trendFor.siteName });
+      if (channel) p.set('channel', channel);
       if (station) p.set('station', station);
-      const res = await fetch(`/api/admin/sftp/dashboard?${p}`);
+      const res = await fetch(`/api/admin/dashboard?${p}`);
       if (!res.ok || dropped) return;
       const json = await readJson(res);
       setSiteTrend(json.data);
     })();
     return () => { dropped = true; };
-  }, [trendFor, hours, station, data?.generatedAt]);
+  }, [trendFor, hours, channel, station, data?.generatedAt]);
 
   const sortedSites = useMemo(() => {
     if (!data) return [];
@@ -171,11 +175,11 @@ export default function DashboardPanel() {
     }));
 
   function clear() {
-    setNode(''); setDepartment(''); setSite(''); setContractor('');
+    setChannel(''); setNode(''); setDepartment(''); setSite(''); setContractor('');
     setStation(''); setBand(''); setStatus('');
   }
 
-  const filtering = Boolean(node || department || site || contractor || station || band || status);
+  const filtering = Boolean(channel || node || department || site || contractor || station || band || status);
 
   if (loading) return <p className="text-sm text-slate-500">Loading the dashboard…</p>;
 
@@ -185,8 +189,8 @@ export default function DashboardPanel() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">AQI monitoring dashboard</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Every reading CIDCO has stored, from the sites that delivered it. Updated as the polls
-            store new data.
+            Every reading CIDCO has stored — delivered over SFTP by the Windows agent and posted
+            through the API — from the sites that sent it. Updates as new data arrives.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -204,6 +208,11 @@ export default function DashboardPanel() {
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <select value={hours} onChange={(e) => setHours(Number(e.target.value))} className={SELECT}>
           {RANGES.map((r) => <option key={r.hours} value={r.hours}>{r.label}</option>)}
+        </select>
+        <select value={channel} onChange={(e) => setChannel(e.target.value)} className={SELECT}>
+          <option value="">SFTP + API</option>
+          <option value="SFTP">SFTP only</option>
+          <option value="API">API only</option>
         </select>
         <select value={node} onChange={(e) => setNode(e.target.value)} className={SELECT}>
           <option value="">All nodes</option>
@@ -245,12 +254,25 @@ export default function DashboardPanel() {
 
       {/* --- the headline numbers --- */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <Tile label="Sites" value={data?.totals.sites ?? 0} hint={`${data?.totals.readings ?? 0} readings`} />
+        <Tile
+          label="Sites"
+          value={data?.totals.sites ?? 0}
+          hint={`${data?.totals.readings ?? 0} readings · ${data?.totals.sftpReadings ?? 0} SFTP · ${data?.totals.apiReadings ?? 0} API`}
+        />
         <Tile label="Reporting" value={data?.totals.reporting ?? 0} hint={`${data?.totals.delayed ?? 0} delayed`} tone="good" />
         <Tile label="Not reporting" value={data?.totals.silent ?? 0} tone={(data?.totals.silent ?? 0) > 0 ? 'bad' : 'plain'} />
         <Tile label="AQI above 200" value={data?.totals.highAqi ?? 0} hint="Poor or worse" tone={(data?.totals.highAqi ?? 0) > 0 ? 'bad' : 'plain'} />
         <Tile label="Location mismatch" value={data?.totals.locationMismatch ?? 0} hint="outside permitted radius" tone={(data?.totals.locationMismatch ?? 0) > 0 ? 'bad' : 'plain'} />
       </div>
+
+      {(data?.totals.unlinkedApiSites ?? 0) > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+          {data!.totals.unlinkedApiSites} API integration{data!.totals.unlinkedApiSites === 1 ? ' is' : 's are'} not
+          linked to a registered site, so {data!.totals.unlinkedApiSites === 1 ? 'it shows' : 'they show'} as
+          “API · …” with no node or map position. Link {data!.totals.unlinkedApiSites === 1 ? 'it' : 'them'} under
+          API channel → Architect handshakes.
+        </div>
+      )}
 
       {/* --- the map --- */}
       <SiteMap sites={data?.sites ?? []} />
@@ -457,6 +479,7 @@ function SiteTable({ sites }: { sites: MapSite[] }) {
         <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
           <tr>
             <th className="whitespace-nowrap px-3 py-2 font-semibold">Site</th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">Channel</th>
             <th className="whitespace-nowrap px-3 py-2 font-semibold">Node</th>
             <th className="whitespace-nowrap px-3 py-2 font-semibold">Station</th>
             <th className="whitespace-nowrap px-3 py-2 font-semibold">AQI</th>
@@ -470,6 +493,22 @@ function SiteTable({ sites }: { sites: MapSite[] }) {
           {sites.map((s) => (
             <tr key={s.id}>
               <td className="whitespace-nowrap px-3 py-2 font-semibold text-slate-900">{s.siteName}</td>
+              <td className="whitespace-nowrap px-3 py-2 text-xs">
+                {(s.channels ?? []).length === 0 ? <span className="text-slate-400">—</span> : (
+                  <span className="inline-flex gap-1">
+                    {(s.channels ?? []).map((c) => (
+                      <span
+                        key={c}
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                          c === 'SFTP' ? 'bg-violet-50 text-violet-700' : 'bg-cidco-50 text-cidco-700'
+                        }`}
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </td>
               <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{s.node ?? '—'}</td>
               <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-600">{s.stationId ?? '—'}</td>
               <td className="whitespace-nowrap px-3 py-2 font-semibold tabular-nums">{s.aqi ?? '—'}</td>
@@ -491,6 +530,14 @@ function SiteTable({ sites }: { sites: MapSite[] }) {
               <td className="whitespace-nowrap px-3 py-2 text-xs">
                 {s.location.status === 'MATCH' ? <span className="text-emerald-700">✓ within radius</span>
                   : s.location.status === 'MISMATCH' ? <span className="text-red-700">✕ outside radius</span>
+                  : s.location.status === 'NO_REPORTED' && s.lastDeliveryAt ? (
+                    // The agent sends no position when it could not measure one
+                    // live, so this is a delivery CIDCO cannot place.
+                    <span className="text-amber-700">? no live position sent</span>
+                  )
+                  : s.location.status === 'NO_REGISTERED' && s.lastDeliveryAt ? (
+                    <span className="text-slate-500">no registered position</span>
+                  )
                   : <span className="text-slate-400">—</span>}
               </td>
             </tr>

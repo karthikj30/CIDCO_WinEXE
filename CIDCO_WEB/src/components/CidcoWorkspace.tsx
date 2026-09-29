@@ -45,10 +45,13 @@ type AdminUser = { id: string; name: string; email: string; role: string };
 /** Which tab a URL lands on, so existing links and bookmarks still work. */
 export type Landing = 'overview' | 'sftp' | 'api';
 
+// Every door opens on the dashboard: an officer signs in to see how the sites
+// are doing, across both channels, before anything else. The old channel URLs
+// still work — they just no longer skip past the charts.
 const FIRST_TAB: Record<Landing, Tab> = {
   overview: 'dashboard',
-  sftp: 'transfers',
-  api: 'apiData',
+  sftp: 'dashboard',
+  api: 'dashboard',
 };
 
 const Icon = ({ d }: { d: string }) => (
@@ -129,8 +132,9 @@ export default function CidcoWorkspace({ landing = 'overview' }: { landing?: Lan
         </div>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-4">
+          <GroupLabel>Overview</GroupLabel>
           <NavButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')} icon={ICONS.dashboard}>
-            Monitoring dashboard
+            Dashboard (SFTP + API)
           </NavButton>
 
           {/* The SFTP half: the Windows agent's deliveries and the master. */}
@@ -205,11 +209,11 @@ export default function CidcoWorkspace({ landing = 'overview' }: { landing?: Lan
 
             {tab === 'transfers' && <TransfersPanel />}
             {tab === 'sftpData' && <SftpDataPanel />}
-            {tab === 'sftpReadings' && <DataTablePanel defaultSource="SFTP" />}
+            {tab === 'sftpReadings' && <DataTablePanel channel="SFTP" />}
             {tab === 'companies' && <SftpCompaniesPanel />}
             {tab === 'accounts' && <SftpAccountsPanel />}
 
-            {tab === 'apiData' && <DataTablePanel defaultSource="API" />}
+            {tab === 'apiData' && <DataTablePanel channel="API" />}
             {tab === 'handshakes' && <HandshakesPanel />}
             {tab === 'validations' && <ValidationRequestsPanel />}
             {tab === 'requests' && <TokenRequestsPanel />}

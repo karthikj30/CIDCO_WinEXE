@@ -446,6 +446,7 @@ CREATE TABLE "api_readings" (
     "handshakeId" TEXT,
     "tokenPrefix" TEXT,
     "sourceIp" TEXT,
+    "companyRecordId" TEXT,
 
     CONSTRAINT "api_readings_pkey" PRIMARY KEY ("id")
 );
@@ -788,6 +789,9 @@ CREATE INDEX "api_readings_projectSiteId_idx" ON "api_readings"("projectSiteId")
 CREATE INDEX "api_readings_handshakeId_idx" ON "api_readings"("handshakeId");
 
 -- CreateIndex
+CREATE INDEX "api_readings_companyRecordId_idx" ON "api_readings"("companyRecordId");
+
+-- CreateIndex
 CREATE INDEX "attachments_reportId_idx" ON "attachments"("reportId");
 
 -- CreateIndex
@@ -921,6 +925,9 @@ ALTER TABLE "api_readings" ADD CONSTRAINT "api_readings_projectId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "api_readings" ADD CONSTRAINT "api_readings_handshakeId_fkey" FOREIGN KEY ("handshakeId") REFERENCES "architect_handshakes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "api_readings" ADD CONSTRAINT "api_readings_companyRecordId_fkey" FOREIGN KEY ("companyRecordId") REFERENCES "companies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "reports"("id") ON DELETE CASCADE ON UPDATE CASCADE;
