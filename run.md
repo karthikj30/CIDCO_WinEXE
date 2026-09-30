@@ -207,8 +207,8 @@ Shared SFTP defaults (override in `.env`): user `cidco@example.com` / password `
 ### The short version — pull, rebuild, restart both portals
 
 ```bash
-cd ~/CIDCO_WinEXE/CIDCO_WEB
-./deploy.sh
+cd ~/cidco_sftp/CIDCO_WEB            # wherever the repository is cloned
+PORT=3000 ARCH_WEB_PORT=3001 ./deploy.sh   # the ports nginx forwards 8040/8041 to
 ```
 
 That is the whole deploy: pull, `npm ci`, `prisma migrate deploy`, `npm run
@@ -237,9 +237,10 @@ that rebuilt only half would leave the two disagreeing about the schema.
 Tell each where the other is, in `.env`:
 
 ```
-# CIDCO_WEB/.env
-PORT=8040
-ARCH_WEB_PORT=8041
+# CIDCO_WEB/.env — PORT / ARCH_WEB_PORT are the ports nginx forwards to
+# (see "Which port" below); the URLs are the public addresses
+PORT=3000
+ARCH_WEB_PORT=3001
 ARCH_WEB_URL="http://13.127.203.85:8041"
 
 # arch_web/.env
@@ -357,15 +358,28 @@ pm2 save
 
 ### Which port
 
-Nothing in the code hardcodes one. Set it in `CIDCO_WEB/.env`:
+Nothing in the code hardcodes one. `ecosystem.config.js` reads `PORT` (CIDCO
+portal) and `ARCH_WEB_PORT` (architect portal) from the shell first, then
+`CIDCO_WEB/.env`, then falls back to 3000 / 3001.
 
-```
-PORT=8040
+**Behind nginx — the current server — the apps must NOT take 8040/8041.**
+nginx owns the public ports and forwards to the apps; give the apps the ports
+nginx forwards to. Starting the portal on 8040 itself fails (the port is
+nginx's) and every page answers **502 Bad Gateway**. See where nginx forwards:
+
+```bash
+sudo grep -rn "listen\|proxy_pass" /etc/nginx/sites-enabled/
 ```
 
-`ecosystem.config.js` reads it from there, and a shell variable of the same
-name wins over it. Change it in one place and pm2, the build and the health
-check all follow.
+and deploy with those numbers, e.g. for 8040 → 3000 and 8041 → 3001:
+
+```bash
+PORT=3000 ARCH_WEB_PORT=3001 ./deploy.sh
+```
+
+Without nginx in front, give the public ports directly
+(`PORT=8040 ARCH_WEB_PORT=8041`). Full setup, including the nginx block:
+`CIDCO_WEB/CIDCO_WEB_Setup_Guide.docx`.
 
 ### Checking both channels
 
